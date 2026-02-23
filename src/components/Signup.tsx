@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Eye, EyeOff, UserPlus, CheckCircle } from 'lucide-react';
+import type { House } from '../types';
 
 export default function Signup({ onBackToLogin }: { onBackToLogin: () => void }) {
   const [formData, setFormData] = useState({
@@ -11,12 +12,32 @@ export default function Signup({ onBackToLogin }: { onBackToLogin: () => void })
     mobile: '',
     business: '',
     industry: '',
+    house_id: '',
   });
+  const [houses, setHouses] = useState<House[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  useEffect(() => {
+    fetchHouses();
+  }, []);
+
+  const fetchHouses = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('houses')
+        .select('*')
+        .order('name');
+
+      if (error) throw error;
+      setHouses(data || []);
+    } catch (err) {
+      console.error('Error fetching houses:', err);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,83 +53,55 @@ export default function Signup({ onBackToLogin }: { onBackToLogin: () => void })
         throw new Error('Password must be at least 6 characters');
       }
 
-      // Step 1: Create auth user
-      console.log('Creating auth user...');
-      
-      let authData, authError;
-      try {
-        const result = await supabase.auth.signUp({
-          email: formData.email,
-          password: formData.password,
-          options: {
-            emailRedirectTo: undefined,
-            data: {}, // Empty metadata to avoid trigger processing
-          },
-        });
-        authData = result.data;
-        authError = result.error;
-      } catch (err: any) {
-        // If signup completely fails, we'll handle it below
-        authError = err;
-      }
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          emailRedirectTo: undefined,
+          data: {},
+        },
+      });
 
-      if (authError) {
-        console.error('Auth error:', authError);
-        
-        // If error is about trigger, the user might still have been created
-        if (authError.message?.includes('Database error') || authError.message?.includes('trigger')) {
-          console.warn('Trigger error detected, checking if user was created...');
-          
-          // Try to sign in to see if the auth user was actually created
-          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-            email: formData.email,
-            password: formData.password,
-          });
-          
-          if (signInData.user) {
-            console.log('User was created despite error! Using existing user ID:', signInData.user.id);
-            authData = signInData;
-            
-            // Sign out immediately so we can continue with profile creation
-            await supabase.auth.signOut();
-          } else {
-            console.error('User was not created:', signInError);
-            throw new Error('Account creation failed. Please contact support.');
-          }
-        } else {
-          throw authError;
-        }
-      }
-      
-      if (!authData?.user) {
-        throw new Error('Failed to create account - no user returned');
-      }
+      if (authError) throw authError;
+      if (!authData?.user) throw new Error('Failed to create account');
 
-      console.log('Auth user confirmed:', authData.user.id);
+      const userId = authData.user.id;
 
-      // Step 2: Create profile directly (trigger is disabled)
-      console.log('Creating profile...');
       const { error: profileError } = await supabase
         .from('profiles')
         .insert({
-          id: authData.user.id,
+          id: userId,
           email: formData.email,
           full_name: formData.full_name,
           mobile: formData.mobile || null,
           business: formData.business || null,
           industry: formData.industry || null,
+          house_id: formData.house_id || null,
           role: 'member',
           approval_status: 'pending',
+          auth_user_id: userId,
         });
 
       if (profileError) {
         console.error('Profile creation error:', profileError);
-        // If profile creation fails, try to clean up auth user
-        await supabase.auth.signOut();
         throw new Error(`Failed to create profile: ${profileError.message}`);
       }
 
-      console.log('Profile created successfully');
+      const { error: userProfileError } = await supabase
+        .from('users_profile')
+        .insert({
+          id: userId,
+          full_name: formData.full_name,
+          phone_number: formData.mobile || null,
+          business_category: formData.business || null,
+        });
+
+      if (userProfileError) {
+        console.error('User profile creation error:', userProfileError);
+        throw new Error(`Failed to create user profile: ${userProfileError.message}`);
+      }
+
+      await supabase.auth.signOut();
 
       setSuccess(true);
     } catch (err: any) {
@@ -245,6 +238,23 @@ export default function Signup({ onBackToLogin }: { onBackToLogin: () => void })
                   className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow transition-all"
                   placeholder="Information Technology"
                 />
+              </div>
+
+              <div className="col-span-2">
+                <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Select House *</label>
+                <select
+                  value={formData.house_id}
+                  onChange={(e) => setFormData({ ...formData, house_id: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow transition-all"
+                  required
+                >
+                  <option value="">-- Select a House --</option>
+                  {houses.map((house) => (
+                    <option key={house.id} value={house.id}>
+                      {house.name} - {house.zone}, {house.state}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
