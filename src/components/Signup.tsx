@@ -58,48 +58,29 @@ export default function Signup({ onBackToLogin }: { onBackToLogin: () => void })
         password: formData.password,
         options: {
           emailRedirectTo: undefined,
-          data: {},
+          data: {
+            full_name: formData.full_name,
+            mobile: formData.mobile || null,
+            business: formData.business || null,
+            industry: formData.industry || null,
+            house_id: formData.house_id || null,
+          },
         },
       });
 
-      if (authError) throw authError;
-      if (!authData?.user) throw new Error('Failed to create account');
-
-      const userId = authData.user.id;
-
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert({
-          id: userId,
-          email: formData.email,
-          full_name: formData.full_name,
-          mobile: formData.mobile || null,
-          business: formData.business || null,
-          industry: formData.industry || null,
-          house_id: formData.house_id || null,
-          role: 'member',
-          approval_status: 'pending',
-          auth_user_id: userId,
-        });
-
-      if (profileError) {
-        console.error('Profile creation error:', profileError);
-        throw new Error(`Failed to create profile: ${profileError.message}`);
+      if (authError) {
+        console.error('Auth signup error:', authError);
+        if (authError.message.includes('already registered')) {
+          throw new Error('This email is already registered. Please login instead.');
+        }
+        throw new Error(authError.message || 'Failed to create account');
       }
 
-      const { error: userProfileError } = await supabase
-        .from('users_profile')
-        .insert({
-          id: userId,
-          full_name: formData.full_name,
-          phone_number: formData.mobile || null,
-          business_category: formData.business || null,
-        });
-
-      if (userProfileError) {
-        console.error('User profile creation error:', userProfileError);
-        throw new Error(`Failed to create user profile: ${userProfileError.message}`);
+      if (!authData?.user) {
+        throw new Error('Failed to create account - no user returned');
       }
+
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
       await supabase.auth.signOut();
 
