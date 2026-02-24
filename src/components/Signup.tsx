@@ -120,7 +120,7 @@ export default function Signup({ onBackToLogin }: { onBackToLogin: () => void })
             </div>
 
             <button
-              onClick={onBackToLogin}
+              onClick={() => { window.location.href = '/'; }}
               className="w-full py-3 rounded-xl font-semibold transition-all-smooth hover:brightness-110"
               style={{ backgroundColor: '#4ADE80', color: '#0B0F0E' }}
             >

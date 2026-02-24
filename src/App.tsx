@@ -88,8 +88,8 @@ function ConnectionTest() {
 function AppContent() {
   const { user, profile, loading } = useAuth();
   const [currentView, setCurrentView] = useState('dashboard');
-  const [showSignup, setShowSignup] = useState(false);
   const [connectionTested, setConnectionTested] = useState(false);
+  const isSignupRoute = window.location.pathname === '/signup';
 
   console.log('AppContent state:', { user: !!user, profile: !!profile, loading });
 
@@ -125,12 +125,13 @@ function AppContent() {
     );
   }
 
+  if (isSignupRoute) {
+    return <Signup onBackToLogin={() => { window.location.href = '/'; }} />;
+  }
+
   if (!user) {
-    console.log('No user found, showing login or signup');
-    if (showSignup) {
-      return <Signup onBackToLogin={() => setShowSignup(false)} />;
-    }
-    return <Login onShowSignup={() => setShowSignup(true)} />;
+    console.log('No user found, showing login');
+    return <Login onShowSignup={() => { window.location.href = '/signup'; }} />;
   }
 
   if (!profile) {
