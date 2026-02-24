@@ -82,6 +82,19 @@ export default function Signup({ onBackToLogin }: { onBackToLogin: () => void })
 
       await new Promise(resolve => setTimeout(resolve, 1000));
 
+      const { error: profileError } = await supabase
+        .from('users_profile')
+        .insert({
+          id: authData.user.id,
+          full_name: formData.full_name,
+          phone_number: formData.mobile || null,
+          business_category: formData.business || null,
+        });
+
+      if (profileError) {
+        console.error('users_profile insert error:', profileError);
+      }
+
       await supabase.auth.signOut();
 
       setSuccess(true);
