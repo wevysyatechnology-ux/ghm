@@ -915,11 +915,22 @@ function DeleteConfirmModal({ member, onClose, onSuccess }: { member: Profile & 
     setLoading(true);
 
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', member.id);
-      if (error) throw error;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(`${supabaseUrl}/functions/v1/delete-member`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ memberId: member.id }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Failed to delete member');
+
       onSuccess();
     } catch (err: any) {
       setError(err.message || 'Failed to delete member');
