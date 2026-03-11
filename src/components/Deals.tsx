@@ -1,10 +1,28 @@
 import { useEffect, useState } from 'react';
 import { Plus, DollarSign } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { Deal, Profile, House } from '../types';
+import { House } from '../types';
+import { Profile } from '../types';
+
+interface CoreDeal {
+  id: string;
+  creator_id: string;
+  house_id: string | null;
+  title: string;
+  description: string;
+  amount: number;
+  deal_type: string;
+  status: string;
+  created_at: string;
+  from_member_id: string | null;
+  to_member_id: string | null;
+  from_member?: { full_name: string };
+  to_member?: { full_name: string };
+  house?: { name: string };
+}
 
 export default function Deals() {
-  const [deals, setDeals] = useState<Deal[]>([]);
+  const [deals, setDeals] = useState<CoreDeal[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
 
@@ -15,12 +33,12 @@ export default function Deals() {
   const fetchDeals = async () => {
     try {
       const { data, error } = await supabase
-        .from('deals')
+        .from('core_deals')
         .select(`
           *,
           from_member:from_member_id(full_name),
           to_member:to_member_id(full_name),
-          house:houses(name)
+          house:house_id(name)
         `)
         .order('created_at', { ascending: false });
 
@@ -31,6 +49,13 @@ export default function Deals() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const statusColor = (s: string) => {
+    if (s === 'completed') return '#4ADE80';
+    if (s === 'active') return '#6EE7B7';
+    if (s === 'cancelled') return '#EF4444';
+    return '#F59E0B';
   };
 
   return (
@@ -64,28 +89,40 @@ export default function Deals() {
                 key={deal.id}
                 className="bg-[#0F1412] rounded-xl p-4 border border-gray-800/50 hover:border-gray-700 transition-all"
               >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start space-x-4 flex-1">
-                    <div className="p-2 rounded-lg" style={{ backgroundColor: 'rgba(74, 222, 128, 0.1)' }}>
-                      <DollarSign className="w-5 h-5" style={{ color: '#4ADE80' }} />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center space-x-2">
-                          {deal.from_member && <span className="font-medium">{deal.from_member.full_name}</span>}
-                          {deal.from_member && deal.to_member && <span className="text-[#6B7280]">→</span>}
-                          {deal.to_member && <span className="font-medium">{deal.to_member.full_name}</span>}
-                        </div>
-                        <span className="text-xl font-bold" style={{ color: '#4ADE80' }}>
-                          ${deal.amount.toLocaleString()}
+                <div className="flex items-start space-x-4">
+                  <div className="p-2 rounded-lg" style={{ backgroundColor: 'rgba(74, 222, 128, 0.1)' }}>
+                    <DollarSign className="w-5 h-5" style={{ color: '#4ADE80' }} />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between mb-1">
+                      <h3 className="font-semibold">{deal.title}</h3>
+                      <div className="flex items-center space-x-2">
+                        {deal.amount > 0 && (
+                          <span className="text-xl font-bold" style={{ color: '#4ADE80' }}>
+                            ₹{deal.amount.toLocaleString()}
+                          </span>
+                        )}
+                        <span
+                          className="text-xs px-2 py-0.5 rounded-full font-medium capitalize"
+                          style={{ backgroundColor: `${statusColor(deal.status)}20`, color: statusColor(deal.status) }}
+                        >
+                          {deal.status}
                         </span>
                       </div>
-                      <p className="text-[#9CA3AF] text-sm mb-2">{deal.description}</p>
-                      <div className="flex items-center space-x-4 text-xs text-[#6B7280]">
-                        {deal.house && <span>House: {deal.house.name}</span>}
-                        <span>Deal Date: {new Date(deal.deal_date).toLocaleDateString()}</span>
-                        <span>Recorded: {new Date(deal.created_at).toLocaleDateString()}</span>
-                      </div>
+                    </div>
+                    <p className="text-[#9CA3AF] text-sm mb-2">{deal.description}</p>
+                    <div className="flex flex-wrap items-center gap-4 text-xs text-[#6B7280]">
+                      {deal.from_member && (
+                        <span>From: <span className="text-gray-300">{deal.from_member.full_name}</span></span>
+                      )}
+                      {deal.to_member && (
+                        <span>To: <span className="text-gray-300">{deal.to_member.full_name}</span></span>
+                      )}
+                      {deal.deal_type && (
+                        <span className="capitalize">Type: {deal.deal_type}</span>
+                      )}
+                      {deal.house && <span>House: {deal.house.name}</span>}
+                      <span>{new Date(deal.created_at).toLocaleDateString()}</span>
                     </div>
                   </div>
                 </div>
@@ -118,12 +155,14 @@ function AddDealModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [houses, setHouses] = useState<House[]>([]);
   const [formData, setFormData] = useState({
+    title: '',
+    description: '',
     amount: '',
+    deal_type: 'business',
+    status: 'active',
     from_member_id: '',
     to_member_id: '',
-    description: '',
     house_id: '',
-    deal_date: new Date().toISOString().split('T')[0],
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -147,13 +186,15 @@ function AddDealModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
     setLoading(true);
 
     try {
-      const { error } = await supabase.from('deals').insert([{
-        amount: parseFloat(formData.amount),
+      const { error } = await supabase.from('core_deals').insert([{
+        title: formData.title,
+        description: formData.description,
+        amount: parseFloat(formData.amount) || 0,
+        deal_type: formData.deal_type,
+        status: formData.status,
         from_member_id: formData.from_member_id || null,
         to_member_id: formData.to_member_id || null,
-        description: formData.description,
         house_id: formData.house_id || null,
-        deal_date: formData.deal_date,
       }]);
       if (error) throw error;
       onSuccess();
@@ -165,11 +206,22 @@ function AddDealModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-card rounded-2xl p-8 border border-gray-800/50 max-w-2xl w-full">
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-card rounded-2xl p-8 border border-gray-800/50 max-w-2xl w-full my-8">
         <h2 className="text-2xl font-bold mb-6">Add New Deal</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Title</label>
+            <input
+              type="text"
+              value={formData.title}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow"
+              required
+            />
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Amount</label>
@@ -183,14 +235,17 @@ function AddDealModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Deal Date</label>
-              <input
-                type="date"
-                value={formData.deal_date}
-                onChange={(e) => setFormData({ ...formData, deal_date: e.target.value })}
+              <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Deal Type</label>
+              <select
+                value={formData.deal_type}
+                onChange={(e) => setFormData({ ...formData, deal_type: e.target.value })}
                 className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white focus:outline-none input-glow"
-                required
-              />
+              >
+                <option value="business">Business</option>
+                <option value="referral">Referral</option>
+                <option value="partnership">Partnership</option>
+                <option value="other">Other</option>
+              </select>
             </div>
             <div>
               <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">From Member</label>

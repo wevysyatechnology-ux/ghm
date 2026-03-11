@@ -1,10 +1,24 @@
 import { useEffect, useState } from 'react';
-import { Plus, TrendingUp } from 'lucide-react';
+import { Plus, TrendingUp, Calendar } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { I2WEEvent, Profile } from '../types';
+import { Profile, House } from '../types';
+
+interface CoreI2WE {
+  id: string;
+  member_1_id: string;
+  member_2_id: string;
+  house_id: string | null;
+  meeting_date: string;
+  notes: string;
+  status: string;
+  created_at: string;
+  member_1?: { full_name: string };
+  member_2?: { full_name: string };
+  house?: { name: string };
+}
 
 export default function I2WE() {
-  const [events, setEvents] = useState<I2WEEvent[]>([]);
+  const [events, setEvents] = useState<CoreI2WE[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
 
@@ -15,10 +29,12 @@ export default function I2WE() {
   const fetchEvents = async () => {
     try {
       const { data, error } = await supabase
-        .from('i2we_events')
+        .from('core_i2we')
         .select(`
           *,
-          member:member_id(full_name)
+          member_1:member_1_id(full_name),
+          member_2:member_2_id(full_name),
+          house:house_id(name)
         `)
         .order('created_at', { ascending: false });
 
@@ -29,6 +45,13 @@ export default function I2WE() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const statusColor = (s: string) => {
+    if (s === 'completed') return '#4ADE80';
+    if (s === 'scheduled') return '#6EE7B7';
+    if (s === 'cancelled') return '#EF4444';
+    return '#F59E0B';
   };
 
   return (
@@ -71,16 +94,27 @@ export default function I2WE() {
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center justify-between mb-2">
-                      <h3 className="font-semibold">{event.event_name}</h3>
-                      <span className="text-sm text-[#6B7280]">
-                        {new Date(event.event_date).toLocaleDateString()}
+                      <div className="flex items-center space-x-2">
+                        <span className="font-semibold">{event.member_1?.full_name || '—'}</span>
+                        <span className="text-[#6B7280]">↔</span>
+                        <span className="font-semibold">{event.member_2?.full_name || '—'}</span>
+                      </div>
+                      <span
+                        className="text-xs px-2 py-0.5 rounded-full font-medium capitalize"
+                        style={{ backgroundColor: `${statusColor(event.status)}20`, color: statusColor(event.status) }}
+                      >
+                        {event.status}
                       </span>
                     </div>
-                    {event.description && (
-                      <p className="text-[#9CA3AF] text-sm mb-2">{event.description}</p>
+                    {event.notes && (
+                      <p className="text-[#9CA3AF] text-sm mb-2">{event.notes}</p>
                     )}
-                    <div className="flex items-center space-x-4 text-xs text-[#6B7280]">
-                      <span>Member: {event.member?.full_name}</span>
+                    <div className="flex flex-wrap items-center gap-4 text-xs text-[#6B7280]">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="w-3 h-3" />
+                        Meeting: {new Date(event.meeting_date).toLocaleDateString()}
+                      </span>
+                      {event.house && <span>House: {event.house.name}</span>}
                       <span>Recorded: {new Date(event.created_at).toLocaleDateString()}</span>
                     </div>
                   </div>
@@ -112,25 +146,29 @@ export default function I2WE() {
 
 function AddEventModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [houses, setHouses] = useState<House[]>([]);
   const [formData, setFormData] = useState({
-    member_id: '',
-    event_name: '',
-    description: '',
-    event_date: new Date().toISOString().split('T')[0],
+    member_1_id: '',
+    member_2_id: '',
+    house_id: '',
+    meeting_date: new Date().toISOString().split('T')[0],
+    notes: '',
+    status: 'scheduled',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    fetchProfiles();
+    fetchData();
   }, []);
 
-  const fetchProfiles = async () => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, full_name')
-      .order('full_name');
-    setProfiles(data || []);
+  const fetchData = async () => {
+    const [profilesRes, housesRes] = await Promise.all([
+      supabase.from('profiles').select('id, full_name').order('full_name'),
+      supabase.from('houses').select('id, name').order('name'),
+    ]);
+    setProfiles(profilesRes.data || []);
+    setHouses(housesRes.data || []);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -139,7 +177,14 @@ function AddEventModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
     setLoading(true);
 
     try {
-      const { error } = await supabase.from('i2we_events').insert([formData]);
+      const { error } = await supabase.from('core_i2we').insert([{
+        member_1_id: formData.member_1_id,
+        member_2_id: formData.member_2_id,
+        house_id: formData.house_id || null,
+        meeting_date: formData.meeting_date,
+        notes: formData.notes,
+        status: formData.status,
+      }]);
       if (error) throw error;
       onSuccess();
     } catch (err: any) {
@@ -150,17 +195,17 @@ function AddEventModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-card rounded-2xl p-8 border border-gray-800/50 max-w-2xl w-full">
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-card rounded-2xl p-8 border border-gray-800/50 max-w-2xl w-full my-8">
         <h2 className="text-2xl font-bold mb-6">Add I2WE Event</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Member</label>
+              <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Member 1</label>
               <select
-                value={formData.member_id}
-                onChange={(e) => setFormData({ ...formData, member_id: e.target.value })}
+                value={formData.member_1_id}
+                onChange={(e) => setFormData({ ...formData, member_1_id: e.target.value })}
                 className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white focus:outline-none input-glow"
                 required
               >
@@ -171,33 +216,62 @@ function AddEventModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Event Date</label>
+              <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Member 2</label>
+              <select
+                value={formData.member_2_id}
+                onChange={(e) => setFormData({ ...formData, member_2_id: e.target.value })}
+                className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white focus:outline-none input-glow"
+                required
+              >
+                <option value="">Select member</option>
+                {profiles.map((p) => (
+                  <option key={p.id} value={p.id}>{p.full_name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Meeting Date</label>
               <input
                 type="date"
-                value={formData.event_date}
-                onChange={(e) => setFormData({ ...formData, event_date: e.target.value })}
+                value={formData.meeting_date}
+                onChange={(e) => setFormData({ ...formData, meeting_date: e.target.value })}
                 className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white focus:outline-none input-glow"
                 required
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Status</label>
+              <select
+                value={formData.status}
+                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white focus:outline-none input-glow"
+              >
+                <option value="scheduled">Scheduled</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Event Name</label>
-            <input
-              type="text"
-              value={formData.event_name}
-              onChange={(e) => setFormData({ ...formData, event_name: e.target.value })}
-              className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow"
-              required
-            />
+            <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">House (Optional)</label>
+            <select
+              value={formData.house_id}
+              onChange={(e) => setFormData({ ...formData, house_id: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white focus:outline-none input-glow"
+            >
+              <option value="">Select house</option>
+              {houses.map((h) => (
+                <option key={h.id} value={h.id}>{h.name}</option>
+              ))}
+            </select>
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Description</label>
+            <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Notes</label>
             <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
               className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow resize-none"
               rows={3}
             />

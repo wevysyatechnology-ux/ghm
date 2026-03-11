@@ -1,10 +1,29 @@
 import { useEffect, useState } from 'react';
-import { Search, Plus, Link2 as LinkIcon } from 'lucide-react';
+import { Plus, Link2 as LinkIcon, Phone, Mail, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { Link, Profile, House } from '../types';
+import { House } from '../types';
+import { Profile } from '../types';
+
+interface CoreLink {
+  id: string;
+  from_user_id: string;
+  to_user_id: string;
+  title: string;
+  description: string;
+  contact_name: string;
+  contact_phone: string;
+  contact_email: string;
+  urgency: number;
+  house_id: string | null;
+  status: string;
+  created_at: string;
+  from_user?: { full_name: string };
+  to_user?: { full_name: string };
+  house?: { name: string };
+}
 
 export default function Links() {
-  const [links, setLinks] = useState<Link[]>([]);
+  const [links, setLinks] = useState<CoreLink[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
 
@@ -15,12 +34,12 @@ export default function Links() {
   const fetchLinks = async () => {
     try {
       const { data, error } = await supabase
-        .from('links')
+        .from('core_links')
         .select(`
           *,
-          from_member:from_member_id(full_name, email),
-          to_member:to_member_id(full_name, email),
-          house:houses(name)
+          from_user:from_user_id(full_name),
+          to_user:to_user_id(full_name),
+          house:house_id(name)
         `)
         .order('created_at', { ascending: false });
 
@@ -31,6 +50,12 @@ export default function Links() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const urgencyColor = (u: number) => {
+    if (u >= 8) return '#EF4444';
+    if (u >= 5) return '#F59E0B';
+    return '#6EE7B7';
   };
 
   return (
@@ -64,22 +89,44 @@ export default function Links() {
                 key={link.id}
                 className="bg-[#0F1412] rounded-xl p-4 border border-gray-800/50 hover:border-gray-700 transition-all"
               >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start space-x-4">
-                    <div className="p-2 rounded-lg" style={{ backgroundColor: 'rgba(110, 231, 183, 0.1)' }}>
-                      <LinkIcon className="w-5 h-5" style={{ color: '#6EE7B7' }} />
+                <div className="flex items-start space-x-4">
+                  <div className="p-2 rounded-lg" style={{ backgroundColor: 'rgba(110, 231, 183, 0.1)' }}>
+                    <LinkIcon className="w-5 h-5" style={{ color: '#6EE7B7' }} />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between mb-1">
+                      <h3 className="font-semibold">{link.title}</h3>
+                      <div className="flex items-center space-x-2">
+                        <span
+                          className="text-xs px-2 py-0.5 rounded-full font-medium"
+                          style={{ backgroundColor: `${urgencyColor(link.urgency)}20`, color: urgencyColor(link.urgency) }}
+                        >
+                          Urgency {link.urgency}/10
+                        </span>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-gray-800 text-gray-400 capitalize">{link.status}</span>
+                      </div>
                     </div>
-                    <div>
-                      <div className="flex items-center space-x-2 mb-2">
-                        <span className="font-medium">{link.from_member?.full_name}</span>
-                        <span className="text-[#6B7280]">→</span>
-                        <span className="font-medium">{link.to_member?.full_name}</span>
-                      </div>
-                      <p className="text-[#9CA3AF] text-sm mb-2">{link.description}</p>
-                      <div className="flex items-center space-x-4 text-xs text-[#6B7280]">
-                        {link.house && <span>House: {link.house.name}</span>}
-                        <span>{new Date(link.created_at).toLocaleString()}</span>
-                      </div>
+                    <p className="text-[#9CA3AF] text-sm mb-2">{link.description}</p>
+                    <div className="flex flex-wrap items-center gap-4 text-xs text-[#6B7280]">
+                      <span>From: <span className="text-gray-300">{link.from_user?.full_name || '—'}</span></span>
+                      <span>To: <span className="text-gray-300">{link.to_user?.full_name || '—'}</span></span>
+                      {link.contact_name && (
+                        <span className="flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" /> {link.contact_name}
+                        </span>
+                      )}
+                      {link.contact_phone && (
+                        <span className="flex items-center gap-1">
+                          <Phone className="w-3 h-3" /> {link.contact_phone}
+                        </span>
+                      )}
+                      {link.contact_email && (
+                        <span className="flex items-center gap-1">
+                          <Mail className="w-3 h-3" /> {link.contact_email}
+                        </span>
+                      )}
+                      {link.house && <span>House: {link.house.name}</span>}
+                      <span>{new Date(link.created_at).toLocaleDateString()}</span>
                     </div>
                   </div>
                 </div>
@@ -112,10 +159,16 @@ function AddLinkModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [houses, setHouses] = useState<House[]>([]);
   const [formData, setFormData] = useState({
-    from_member_id: '',
-    to_member_id: '',
+    from_user_id: '',
+    to_user_id: '',
+    title: '',
     description: '',
+    contact_name: '',
+    contact_phone: '',
+    contact_email: '',
+    urgency: 5,
     house_id: '',
+    status: 'open',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -139,7 +192,7 @@ function AddLinkModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
     setLoading(true);
 
     try {
-      const { error } = await supabase.from('links').insert([{
+      const { error } = await supabase.from('core_links').insert([{
         ...formData,
         house_id: formData.house_id || null,
       }]);
@@ -153,8 +206,8 @@ function AddLinkModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-card rounded-2xl p-8 border border-gray-800/50 max-w-2xl w-full">
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-card rounded-2xl p-8 border border-gray-800/50 max-w-2xl w-full my-8">
         <h2 className="text-2xl font-bold mb-6">Add New Link</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -162,8 +215,8 @@ function AddLinkModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
             <div>
               <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">From Member</label>
               <select
-                value={formData.from_member_id}
-                onChange={(e) => setFormData({ ...formData, from_member_id: e.target.value })}
+                value={formData.from_user_id}
+                onChange={(e) => setFormData({ ...formData, from_user_id: e.target.value })}
                 className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white focus:outline-none input-glow"
                 required
               >
@@ -176,8 +229,8 @@ function AddLinkModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
             <div>
               <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">To Member</label>
               <select
-                value={formData.to_member_id}
-                onChange={(e) => setFormData({ ...formData, to_member_id: e.target.value })}
+                value={formData.to_user_id}
+                onChange={(e) => setFormData({ ...formData, to_user_id: e.target.value })}
                 className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white focus:outline-none input-glow"
                 required
               >
@@ -190,6 +243,17 @@ function AddLinkModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
           </div>
 
           <div>
+            <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Title</label>
+            <input
+              type="text"
+              value={formData.title}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow"
+              required
+            />
+          </div>
+
+          <div>
             <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Description</label>
             <textarea
               value={formData.description}
@@ -198,6 +262,47 @@ function AddLinkModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
               rows={3}
               required
             />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Contact Name</label>
+              <input
+                type="text"
+                value={formData.contact_name}
+                onChange={(e) => setFormData({ ...formData, contact_name: e.target.value })}
+                className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Contact Phone</label>
+              <input
+                type="text"
+                value={formData.contact_phone}
+                onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
+                className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Contact Email</label>
+              <input
+                type="email"
+                value={formData.contact_email}
+                onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
+                className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Urgency (1-10)</label>
+              <input
+                type="number"
+                min={1}
+                max={10}
+                value={formData.urgency}
+                onChange={(e) => setFormData({ ...formData, urgency: parseInt(e.target.value) })}
+                className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white focus:outline-none input-glow"
+              />
+            </div>
           </div>
 
           <div>
