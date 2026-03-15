@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Building2, Users, Link2, DollarSign, TrendingUp, ClipboardList } from 'lucide-react';
+import { Building2, Users, Link2, DollarSign, TrendingUp, ClipboardList, CalendarDays } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { DashboardStats } from '../types';
@@ -13,6 +13,7 @@ export default function Dashboard() {
     deals: 0,
     i2we: 0,
     attendance: 0,
+    events: 0,
   });
   const [loading, setLoading] = useState(true);
 
@@ -22,13 +23,14 @@ export default function Dashboard() {
 
   const fetchStats = async () => {
     try {
-      const [housesRes, membersRes, linksRes, dealsRes, i2weRes, attendanceRes] = await Promise.all([
+      const [housesRes, membersRes, linksRes, dealsRes, i2weRes, attendanceRes, eventsRes] = await Promise.all([
         supabase.from('houses').select('id', { count: 'exact', head: true }),
         supabase.from('profiles').select('id', { count: 'exact', head: true }),
         supabase.from('core_links').select('id', { count: 'exact', head: true }),
         supabase.from('core_deals').select('id', { count: 'exact', head: true }),
         supabase.from('core_i2we').select('id', { count: 'exact', head: true }),
         supabase.from('attendance_records').select('id', { count: 'exact', head: true }),
+        supabase.from('events').select('id', { count: 'exact', head: true }),
       ]);
 
       setStats({
@@ -38,6 +40,7 @@ export default function Dashboard() {
         deals: dealsRes.count || 0,
         i2we: i2weRes.count || 0,
         attendance: attendanceRes.count || 0,
+        events: eventsRes.count || 0,
       });
     } catch (error) {
       console.error('Error fetching stats:', error);
@@ -53,6 +56,7 @@ export default function Dashboard() {
     { label: 'Deals', value: stats.deals, icon: DollarSign, color: '#4ADE80' },
     { label: 'I2WE', value: stats.i2we, icon: TrendingUp, color: '#6EE7B7' },
     { label: 'Attendance', value: stats.attendance, icon: ClipboardList, color: '#4ADE80' },
+    { label: 'Events', value: stats.events, icon: CalendarDays, color: '#6EE7B7' },
   ];
 
   return (

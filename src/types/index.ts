@@ -96,4 +96,5 @@ export interface DashboardStats {
   deals: number;
   i2we: number;
   attendance: number;
+  events: number;
 }
