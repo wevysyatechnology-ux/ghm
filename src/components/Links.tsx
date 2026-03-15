@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Plus, Link2 as LinkIcon, Phone, Mail, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { House } from '../types';
-import { Profile } from '../types';
+
 
 interface CoreLink {
   id: string;
@@ -35,16 +34,37 @@ export default function Links() {
     try {
       const { data, error } = await supabase
         .from('core_links')
-        .select(`
-          *,
-          from_user:from_user_id(full_name),
-          to_user:to_user_id(full_name),
-          house:house_id(name)
-        `)
+        .select('*, house:house_id(name)')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setLinks(data || []);
+
+      const rows = data || [];
+
+      // Collect unique auth user IDs referenced by the links
+      const userIds = [...new Set(
+        rows.flatMap(l => [l.from_user_id, l.to_user_id]).filter(Boolean)
+      )];
+
+      let nameMap: Record<string, string> = {};
+      if (userIds.length > 0) {
+        // profiles.auth_user_id = auth.users.id (the FK used by core_links)
+        const { data: profilesData } = await supabase
+          .from('profiles')
+          .select('id, auth_user_id, full_name')
+          .or(userIds.map(id => `auth_user_id.eq.${id},id.eq.${id}`).join(','));
+
+        (profilesData || []).forEach(p => {
+          if (p.auth_user_id) nameMap[p.auth_user_id] = p.full_name;
+          nameMap[p.id] = p.full_name;
+        });
+      }
+
+      setLinks(rows.map(link => ({
+        ...link,
+        from_user: { full_name: nameMap[link.from_user_id] || '—' },
+        to_user: { full_name: nameMap[link.to_user_id] || '—' },
+      })));
     } catch (error) {
       console.error('Error fetching links:', error);
     } finally {
@@ -155,9 +175,39 @@ export default function Links() {
   );
 }
 
+interface ProfileOption {
+  id: string;
+  auth_user_id: string | null;
+  full_name: string;
+}
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+
+async function sendPushNotification(options: {
+  userId: string;
+  type: string;
+  title: string;
+  body: string;
+  data?: Record<string, any>;
+  priority?: string;
+}) {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    await fetch(`${SUPABASE_URL}/functions/v1/send-notification`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session?.access_token || ''}`,
+      },
+      body: JSON.stringify(options),
+    });
+  } catch (err) {
+    console.error('Push notification error:', err);
+  }
+}
+
 function AddLinkModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
-  const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [houses, setHouses] = useState<House[]>([]);
+  const [profiles, setProfiles] = useState<ProfileOption[]>([]);
   const [formData, setFormData] = useState({
     from_user_id: '',
     to_user_id: '',
@@ -167,24 +217,15 @@ function AddLinkModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
     contact_phone: '',
     contact_email: '',
     urgency: 5,
-    house_id: '',
     status: 'open',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    fetchData();
+    supabase.from('profiles').select('id, auth_user_id, full_name').order('full_name')
+      .then(({ data }) => setProfiles(data || []));
   }, []);
-
-  const fetchData = async () => {
-    const [profilesRes, housesRes] = await Promise.all([
-      supabase.from('profiles').select('id, full_name').order('full_name'),
-      supabase.from('houses').select('id, name').order('name'),
-    ]);
-    setProfiles(profilesRes.data || []);
-    setHouses(housesRes.data || []);
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -192,11 +233,49 @@ function AddLinkModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
     setLoading(true);
 
     try {
-      const { error } = await supabase.from('core_links').insert([{
-        ...formData,
-        house_id: formData.house_id || null,
-      }]);
-      if (error) throw error;
+      const { data: inserted, error: insertError } = await supabase
+        .from('core_links')
+        .insert([{
+          ...formData,
+          // FK core_links_from/to_user_id_fkey → auth.users.id
+          // profiles.auth_user_id holds the real auth UID when profiles.id differs
+          from_user_id: profiles.find(p => p.id === formData.from_user_id)?.auth_user_id || formData.from_user_id,
+          to_user_id:   profiles.find(p => p.id === formData.to_user_id)?.auth_user_id   || formData.to_user_id,
+        }])
+        .select('id')
+        .single();
+      if (insertError) throw insertError;
+
+      const linkId = inserted.id;
+      const fromProfile = profiles.find(p => p.id === formData.from_user_id);
+      const toProfile   = profiles.find(p => p.id === formData.to_user_id);
+      const senderName   = fromProfile?.full_name || 'A member';
+      const receiverName = toProfile?.full_name   || 'A member';
+      // Use auth_user_id (= auth.users.id) so push_tokens lookup succeeds;
+      // fall back to id for profiles where id already equals auth.users.id
+      const senderAuthId   = fromProfile?.auth_user_id || formData.from_user_id;
+      const receiverAuthId = toProfile?.auth_user_id   || formData.to_user_id;
+
+      // Notify receiver
+      sendPushNotification({
+        userId: receiverAuthId,
+        type: 'link_received',
+        title: '🔗 New Business Link',
+        body: `You've received a verified business link from ${senderName}.`,
+        data: { linkId, senderName, senderId: senderAuthId },
+        priority: 'high',
+      });
+
+      // Notify sender
+      sendPushNotification({
+        userId: senderAuthId,
+        type: 'link_sent',
+        title: '✅ Link Sent Successfully',
+        body: `Your business link was successfully sent to ${receiverName}.`,
+        data: { linkId, recipientName: receiverName, recipientId: receiverAuthId },
+        priority: 'normal',
+      });
+
       onSuccess();
     } catch (err: any) {
       setError(err.message || 'Failed to create link');
@@ -303,20 +382,6 @@ function AddLinkModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
                 className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white focus:outline-none input-glow"
               />
             </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">House (Optional)</label>
-            <select
-              value={formData.house_id}
-              onChange={(e) => setFormData({ ...formData, house_id: e.target.value })}
-              className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white focus:outline-none input-glow"
-            >
-              <option value="">Select house</option>
-              {houses.map((h) => (
-                <option key={h.id} value={h.id}>{h.name}</option>
-              ))}
-            </select>
           </div>
 
           {error && (

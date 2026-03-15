@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Plus, TrendingUp, Calendar } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { Profile, House } from '../types';
 
 interface CoreI2WE {
   id: string;
@@ -14,7 +13,42 @@ interface CoreI2WE {
   created_at: string;
   member_1?: { full_name: string };
   member_2?: { full_name: string };
-  house?: { name: string };
+}
+
+interface ProfileOption {
+  id: string;
+  auth_user_id: string | null;
+  full_name: string;
+}
+
+interface HouseOption {
+  id: string;
+  name: string;
+}
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+
+async function sendPushNotification(options: {
+  userId: string;
+  type: string;
+  title: string;
+  body: string;
+  data?: Record<string, any>;
+  priority?: string;
+}) {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    await fetch(`${SUPABASE_URL}/functions/v1/send-notification`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session?.access_token || ''}`,
+      },
+      body: JSON.stringify(options),
+    });
+  } catch (err) {
+    console.error('Push notification error:', err);
+  }
 }
 
 export default function I2WE() {
@@ -30,16 +64,35 @@ export default function I2WE() {
     try {
       const { data, error } = await supabase
         .from('core_i2we')
-        .select(`
-          *,
-          member_1:member_1_id(full_name),
-          member_2:member_2_id(full_name),
-          house:house_id(name)
-        `)
+        .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setEvents(data || []);
+
+      const rows = data || [];
+
+      const userIds = [...new Set(
+        rows.flatMap(e => [e.member_1_id, e.member_2_id]).filter(Boolean)
+      )];
+
+      let nameMap: Record<string, string> = {};
+      if (userIds.length > 0) {
+        const { data: profilesData } = await supabase
+          .from('profiles')
+          .select('id, auth_user_id, full_name')
+          .or(userIds.map(id => `auth_user_id.eq.${id},id.eq.${id}`).join(','));
+
+        (profilesData || []).forEach(p => {
+          if (p.auth_user_id) nameMap[p.auth_user_id] = p.full_name;
+          nameMap[p.id] = p.full_name;
+        });
+      }
+
+      setEvents(rows.map(e => ({
+        ...e,
+        member_1: { full_name: nameMap[e.member_1_id] || '—' },
+        member_2: { full_name: nameMap[e.member_2_id] || '—' },
+      })));
     } catch (error) {
       console.error('Error fetching I2WE events:', error);
     } finally {
@@ -114,7 +167,6 @@ export default function I2WE() {
                         <Calendar className="w-3 h-3" />
                         Meeting: {new Date(event.meeting_date).toLocaleDateString()}
                       </span>
-                      {event.house && <span>House: {event.house.name}</span>}
                       <span>Recorded: {new Date(event.created_at).toLocaleDateString()}</span>
                     </div>
                   </div>
@@ -145,8 +197,8 @@ export default function I2WE() {
 }
 
 function AddEventModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
-  const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [houses, setHouses] = useState<House[]>([]);
+  const [profiles, setProfiles] = useState<ProfileOption[]>([]);
+  const [houses, setHouses] = useState<HouseOption[]>([]);
   const [formData, setFormData] = useState({
     member_1_id: '',
     member_2_id: '',
@@ -159,17 +211,14 @@ function AddEventModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
   const [error, setError] = useState('');
 
   useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
-    const [profilesRes, housesRes] = await Promise.all([
-      supabase.from('profiles').select('id, full_name').order('full_name'),
+    Promise.all([
+      supabase.from('profiles').select('id, auth_user_id, full_name').order('full_name'),
       supabase.from('houses').select('id, name').order('name'),
-    ]);
-    setProfiles(profilesRes.data || []);
-    setHouses(housesRes.data || []);
-  };
+    ]).then(([profilesRes, housesRes]) => {
+      setProfiles(profilesRes.data || []);
+      setHouses(housesRes.data || []);
+    });
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -177,15 +226,51 @@ function AddEventModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
     setLoading(true);
 
     try {
-      const { error } = await supabase.from('core_i2we').insert([{
-        member_1_id: formData.member_1_id,
-        member_2_id: formData.member_2_id,
-        house_id: formData.house_id || null,
-        meeting_date: formData.meeting_date,
-        notes: formData.notes,
-        status: formData.status,
-      }]);
-      if (error) throw error;
+      const member1 = profiles.find(p => p.id === formData.member_1_id);
+      const member2 = profiles.find(p => p.id === formData.member_2_id);
+      // FKs reference auth.users.id — resolve via auth_user_id when present
+      const member1AuthId = member1?.auth_user_id || formData.member_1_id;
+      const member2AuthId = member2?.auth_user_id || formData.member_2_id;
+
+      const { data: inserted, error: insertError } = await supabase
+        .from('core_i2we')
+        .insert([{
+          member_1_id: member1AuthId,
+          member_2_id: member2AuthId,
+          house_id: formData.house_id,
+          meeting_date: formData.meeting_date,
+          notes: formData.notes,
+          status: formData.status,
+        }])
+        .select('id')
+        .single();
+      if (insertError) throw insertError;
+
+      const eventId = inserted.id;
+      const member1Name = member1?.full_name || 'A member';
+      const member2Name = member2?.full_name || 'A member';
+      const meetingDate = new Date(formData.meeting_date).toLocaleDateString();
+
+      // Notify Member 1
+      sendPushNotification({
+        userId: member1AuthId,
+        type: 'i2we_scheduled',
+        title: '🤝 I2WE Meeting Scheduled',
+        body: `You have an I2WE meeting with ${member2Name} on ${meetingDate}.`,
+        data: { eventId, partnerName: member2Name, partnerId: member2AuthId, meetingDate: formData.meeting_date },
+        priority: 'high',
+      });
+
+      // Notify Member 2
+      sendPushNotification({
+        userId: member2AuthId,
+        type: 'i2we_scheduled',
+        title: '🤝 I2WE Meeting Scheduled',
+        body: `You have an I2WE meeting with ${member1Name} on ${meetingDate}.`,
+        data: { eventId, partnerName: member1Name, partnerId: member1AuthId, meetingDate: formData.meeting_date },
+        priority: 'high',
+      });
+
       onSuccess();
     } catch (err: any) {
       setError(err.message || 'Failed to create event');
@@ -254,11 +339,12 @@ function AddEventModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">House (Optional)</label>
+            <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">House</label>
             <select
               value={formData.house_id}
               onChange={(e) => setFormData({ ...formData, house_id: e.target.value })}
               className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white focus:outline-none input-glow"
+              required
             >
               <option value="">Select house</option>
               {houses.map((h) => (

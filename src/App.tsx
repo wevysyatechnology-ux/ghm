@@ -11,6 +11,7 @@ import Users from './components/Users';
 import Links from './components/Links';
 import Deals from './components/Deals';
 import I2WE from './components/I2WE';
+import Events from './components/Events';
 import Attendance from './components/Attendance';
 import Reports from './components/Reports';
 import PendingMembers from './components/PendingMembers';
@@ -197,6 +198,7 @@ function AppContent() {
           {currentView === 'links' && <Links />}
           {currentView === 'deals' && <Deals />}
           {currentView === 'i2we' && <I2WE />}
+          {currentView === 'events' && <Events />}
           {currentView === 'attendance' && <Attendance />}
           {currentView === 'reports' && <Reports />}
         </div>

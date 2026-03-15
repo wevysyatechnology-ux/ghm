@@ -1,4 +1,4 @@
-import { Home, Building2, Users, Link2, DollarSign, TrendingUp, ClipboardList, BarChart3, UserCog, LogOut, UserCheck } from 'lucide-react';
+import { Home, Building2, Users, Link2, DollarSign, TrendingUp, CalendarDays, ClipboardList, BarChart3, UserCog, LogOut, UserCheck } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface SidebarProps {
@@ -19,7 +19,8 @@ export default function Sidebar({ currentView, onViewChange }: SidebarProps) {
     { id: 'users', label: 'Users', icon: UserCog },
     { id: 'links', label: 'Links', icon: Link2 },
     { id: 'deals', label: 'Deals', icon: DollarSign },
-    { id: 'i2we', label: 'I2WE', icon: TrendingUp },
+    { id: 'i2we',       label: 'I2WE',       icon: TrendingUp },
+    { id: 'events',     label: 'Events',     icon: CalendarDays },
     { id: 'attendance', label: 'Attendance', icon: ClipboardList },
     { id: 'reports', label: 'Reports', icon: BarChart3 },
   ];
