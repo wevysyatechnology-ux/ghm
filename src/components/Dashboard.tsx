@@ -24,11 +24,11 @@ export default function Dashboard() {
     try {
       const [housesRes, membersRes, linksRes, dealsRes, i2weRes, attendanceRes] = await Promise.all([
         supabase.from('houses').select('id', { count: 'exact', head: true }),
-        supabase.from('members').select('id', { count: 'exact', head: true }),
-        supabase.from('links').select('id', { count: 'exact', head: true }),
-        supabase.from('deals').select('id', { count: 'exact', head: true }),
-        supabase.from('i2we_events').select('id', { count: 'exact', head: true }),
-        supabase.from('attendance').select('id', { count: 'exact', head: true }),
+        supabase.from('profiles').select('id', { count: 'exact', head: true }),
+        supabase.from('core_links').select('id', { count: 'exact', head: true }),
+        supabase.from('core_deals').select('id', { count: 'exact', head: true }),
+        supabase.from('core_i2we').select('id', { count: 'exact', head: true }),
+        supabase.from('attendance_records').select('id', { count: 'exact', head: true }),
       ]);
 
       setStats({
