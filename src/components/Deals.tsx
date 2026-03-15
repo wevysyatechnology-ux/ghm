@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Plus, DollarSign } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 import { House } from '../types';
 import { Profile } from '../types';
 
@@ -152,6 +153,7 @@ export default function Deals() {
 }
 
 function AddDealModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const { user } = useAuth();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [houses, setHouses] = useState<House[]>([]);
   const [formData, setFormData] = useState({
@@ -187,6 +189,7 @@ function AddDealModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
 
     try {
       const { error } = await supabase.from('core_deals').insert([{
+        creator_id: user?.id,
         title: formData.title,
         description: formData.description,
         amount: parseFloat(formData.amount) || 0,
