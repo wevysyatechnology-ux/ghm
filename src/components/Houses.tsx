@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Search, Plus, Filter, Edit, Trash2, X, Upload, Download, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { House } from '../types';
+import { House, Country, State, Zone } from '../types';
 import * as XLSX from 'xlsx';
 
 export default function Houses() {
@@ -239,6 +239,57 @@ function AddHouseModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Cascading dropdown state
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [allStates, setAllStates] = useState<State[]>([]);
+  const [allZones, setAllZones] = useState<Zone[]>([]);
+  const [selectedCountryId, setSelectedCountryId] = useState('');
+  const [selectedStateId, setSelectedStateId] = useState('');
+  const [selectedZoneId, setSelectedZoneId] = useState('');
+
+  useEffect(() => {
+    const fetchLocationData = async () => {
+      const [{ data: c }, { data: s }, { data: z }] = await Promise.all([
+        supabase.from('countries').select('*').order('name'),
+        supabase.from('states').select('*, country:countries(id, name, created_at)').order('name'),
+        supabase.from('zones').select('*, state:states(id, name, country_id, created_at)').order('name'),
+      ]);
+      setCountries(c || []);
+      setAllStates(s || []);
+      setAllZones(z || []);
+    };
+    fetchLocationData();
+  }, []);
+
+  const statesForCountry = selectedCountryId
+    ? allStates.filter((s) => s.country_id === selectedCountryId)
+    : [];
+
+  const zonesForState = selectedStateId
+    ? allZones.filter((z) => z.state_id === selectedStateId)
+    : [];
+
+  const handleCountryChange = (cId: string) => {
+    setSelectedCountryId(cId);
+    setSelectedStateId('');
+    setSelectedZoneId('');
+    const country = countries.find((c) => c.id === cId);
+    setFormData((prev) => ({ ...prev, country: country?.name || '', state: '', zone: '' }));
+  };
+
+  const handleStateChange = (sId: string) => {
+    setSelectedStateId(sId);
+    setSelectedZoneId('');
+    const state = allStates.find((s) => s.id === sId);
+    setFormData((prev) => ({ ...prev, state: state?.name || '', zone: '' }));
+  };
+
+  const handleZoneChange = (zId: string) => {
+    setSelectedZoneId(zId);
+    const zone = allZones.find((z) => z.id === zId);
+    setFormData((prev) => ({ ...prev, zone: zone?.name || '' }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -269,47 +320,69 @@ function AddHouseModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">House Name</label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow"
+              placeholder="Enter house name"
+              required
+            />
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">House Name</label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Zone</label>
-              <input
-                type="text"
-                value={formData.zone}
-                onChange={(e) => setFormData({ ...formData, zone: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">State</label>
-              <input
-                type="text"
-                value={formData.state}
-                onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow"
-                required
-              />
-            </div>
+            {/* Country dropdown */}
             <div>
               <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Country</label>
-              <input
-                type="text"
-                value={formData.country}
-                onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow"
+              <select
+                value={selectedCountryId}
+                onChange={(e) => handleCountryChange(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white focus:outline-none input-glow"
                 required
-              />
+              >
+                <option value="">— Select Country —</option>
+                {countries.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
             </div>
+
+            {/* State dropdown */}
+            <div>
+              <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">State</label>
+              <select
+                value={selectedStateId}
+                onChange={(e) => handleStateChange(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white focus:outline-none input-glow disabled:opacity-50"
+                required
+                disabled={!selectedCountryId}
+              >
+                <option value="">— Select State —</option>
+                {statesForCountry.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Zone dropdown */}
+            <div>
+              <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Zone</label>
+              <select
+                value={selectedZoneId}
+                onChange={(e) => handleZoneChange(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white focus:outline-none input-glow disabled:opacity-50"
+                required
+                disabled={!selectedStateId}
+              >
+                <option value="">— Select Zone —</option>
+                {zonesForState.map((z) => (
+                  <option key={z.id} value={z.id}>{z.name}</option>
+                ))}
+              </select>
+            </div>
+
             <div>
               <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Email</label>
               <input
@@ -371,6 +444,80 @@ function EditHouseModal({ house, onClose, onSuccess }: { house: House; onClose: 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Cascading dropdown state
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [allStates, setAllStates] = useState<State[]>([]);
+  const [allZones, setAllZones] = useState<Zone[]>([]);
+  const [selectedCountryId, setSelectedCountryId] = useState('');
+  const [selectedStateId, setSelectedStateId] = useState('');
+  const [selectedZoneId, setSelectedZoneId] = useState('');
+
+  useEffect(() => {
+    const fetchLocationData = async () => {
+      const [{ data: c }, { data: s }, { data: z }] = await Promise.all([
+        supabase.from('countries').select('*').order('name'),
+        supabase.from('states').select('*, country:countries(id, name, created_at)').order('name'),
+        supabase.from('zones').select('*, state:states(id, name, country_id, created_at)').order('name'),
+      ]);
+      const countriesData = c || [];
+      const statesData = s || [];
+      const zonesData = z || [];
+      setCountries(countriesData);
+      setAllStates(statesData);
+      setAllZones(zonesData);
+
+      // Try to pre-select based on existing house text values
+      const matchedCountry = countriesData.find(
+        (ct) => ct.name.toLowerCase() === house.country.toLowerCase()
+      );
+      if (matchedCountry) {
+        setSelectedCountryId(matchedCountry.id);
+        const matchedState = statesData.find(
+          (st) => st.name.toLowerCase() === house.state.toLowerCase() && st.country_id === matchedCountry.id
+        );
+        if (matchedState) {
+          setSelectedStateId(matchedState.id);
+          const matchedZone = zonesData.find(
+            (zn) => zn.name.toLowerCase() === house.zone.toLowerCase() && zn.state_id === matchedState.id
+          );
+          if (matchedZone) {
+            setSelectedZoneId(matchedZone.id);
+          }
+        }
+      }
+    };
+    fetchLocationData();
+  }, []);
+
+  const statesForCountry = selectedCountryId
+    ? allStates.filter((s) => s.country_id === selectedCountryId)
+    : [];
+
+  const zonesForState = selectedStateId
+    ? allZones.filter((z) => z.state_id === selectedStateId)
+    : [];
+
+  const handleCountryChange = (cId: string) => {
+    setSelectedCountryId(cId);
+    setSelectedStateId('');
+    setSelectedZoneId('');
+    const country = countries.find((c) => c.id === cId);
+    setFormData((prev) => ({ ...prev, country: country?.name || '', state: '', zone: '' }));
+  };
+
+  const handleStateChange = (sId: string) => {
+    setSelectedStateId(sId);
+    setSelectedZoneId('');
+    const state = allStates.find((s) => s.id === sId);
+    setFormData((prev) => ({ ...prev, state: state?.name || '', zone: '' }));
+  };
+
+  const handleZoneChange = (zId: string) => {
+    setSelectedZoneId(zId);
+    const zone = allZones.find((z) => z.id === zId);
+    setFormData((prev) => ({ ...prev, zone: zone?.name || '' }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -404,47 +551,68 @@ function EditHouseModal({ house, onClose, onSuccess }: { house: House; onClose: 
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">House Name</label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow"
+              required
+            />
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">House Name</label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Zone</label>
-              <input
-                type="text"
-                value={formData.zone}
-                onChange={(e) => setFormData({ ...formData, zone: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">State</label>
-              <input
-                type="text"
-                value={formData.state}
-                onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow"
-                required
-              />
-            </div>
+            {/* Country dropdown */}
             <div>
               <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Country</label>
-              <input
-                type="text"
-                value={formData.country}
-                onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow"
+              <select
+                value={selectedCountryId}
+                onChange={(e) => handleCountryChange(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white focus:outline-none input-glow"
                 required
-              />
+              >
+                <option value="">— Select Country —</option>
+                {countries.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
             </div>
+
+            {/* State dropdown */}
+            <div>
+              <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">State</label>
+              <select
+                value={selectedStateId}
+                onChange={(e) => handleStateChange(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white focus:outline-none input-glow disabled:opacity-50"
+                required
+                disabled={!selectedCountryId}
+              >
+                <option value="">— Select State —</option>
+                {statesForCountry.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Zone dropdown */}
+            <div>
+              <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Zone</label>
+              <select
+                value={selectedZoneId}
+                onChange={(e) => handleZoneChange(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white focus:outline-none input-glow disabled:opacity-50"
+                required
+                disabled={!selectedStateId}
+              >
+                <option value="">— Select Zone —</option>
+                {zonesForState.map((z) => (
+                  <option key={z.id} value={z.id}>{z.name}</option>
+                ))}
+              </select>
+            </div>
+
             <div>
               <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Email</label>
               <input

@@ -15,6 +15,7 @@ import Events from './components/Events';
 import Attendance from './components/Attendance';
 import Reports from './components/Reports';
 import PendingMembers from './components/PendingMembers';
+import LocationManagement from './components/LocationManagement';
 import Footer from './components/Footer';
 
 function ConnectionTest() {
@@ -191,6 +192,7 @@ function AppContent() {
       <main className="flex-1 overflow-y-auto flex flex-col">
         <div className="flex-1">
           {currentView === 'dashboard' && <Dashboard />}
+          {currentView === 'locations' && <LocationManagement />}
           {currentView === 'houses' && <Houses />}
           {currentView === 'members' && <Members />}
           {currentView === 'pending' && <PendingMembers />}

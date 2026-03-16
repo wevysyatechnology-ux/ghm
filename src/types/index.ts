@@ -1,5 +1,27 @@
 export type UserRole = 'super_admin' | 'global_admin' | 'zone_admin' | 'house_admin' | 'member';
 
+export interface Country {
+  id: string;
+  name: string;
+  created_at: string;
+}
+
+export interface State {
+  id: string;
+  name: string;
+  country_id: string;
+  created_at: string;
+  country?: Country;
+}
+
+export interface Zone {
+  id: string;
+  name: string;
+  state_id: string;
+  created_at: string;
+  state?: State & { country?: Country };
+}
+
 export interface Profile {
   id: string;
   email: string;

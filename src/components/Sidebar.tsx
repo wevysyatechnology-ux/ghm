@@ -1,4 +1,4 @@
-import { Home, Building2, Users, Link2, DollarSign, TrendingUp, CalendarDays, ClipboardList, BarChart3, UserCog, LogOut, UserCheck } from 'lucide-react';
+import { Home, Building2, Users, Link2, DollarSign, TrendingUp, CalendarDays, ClipboardList, BarChart3, UserCog, LogOut, UserCheck, MapPinned } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface SidebarProps {
@@ -13,6 +13,7 @@ export default function Sidebar({ currentView, onViewChange }: SidebarProps) {
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home },
+    ...(isSuperAdmin ? [{ id: 'locations', label: 'Location', icon: MapPinned }] : []),
     { id: 'houses', label: 'Houses', icon: Building2 },
     { id: 'members', label: 'Members', icon: Users },
     ...(isSuperAdmin ? [{ id: 'pending', label: 'Pending Approvals', icon: UserCheck }] : []),
