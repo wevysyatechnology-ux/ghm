@@ -1,11 +1,28 @@
 import { useEffect, useState } from 'react';
-import { Search, User, Plus, Upload, X, Download, AlertCircle, Edit, Trash2, Mail, Phone, Building, Tag } from 'lucide-react';
+import { Search, User, Plus, Upload, X, Download, AlertCircle, CreditCard as Edit, Trash2, Mail, Phone, Building, Tag } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Profile, House } from '../types';
 import * as XLSX from 'xlsx';
 
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+const MEMBERSHIP_STATUSES = ['active', 'resigned', 'expired', 'terminated'] as const;
+
+function membershipStatusStyle(status: string) {
+  switch (status) {
+    case 'active':
+      return { backgroundColor: 'rgba(74, 222, 128, 0.15)', color: '#4ADE80' };
+    case 'resigned':
+      return { backgroundColor: 'rgba(251, 191, 36, 0.15)', color: '#FBBF24' };
+    case 'expired':
+      return { backgroundColor: 'rgba(107, 114, 128, 0.2)', color: '#9CA3AF' };
+    case 'terminated':
+      return { backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#EF4444' };
+    default:
+      return { backgroundColor: 'rgba(74, 222, 128, 0.15)', color: '#4ADE80' };
+  }
+}
 
 export default function Members() {
   const { profile } = useAuth();
@@ -138,6 +155,12 @@ export default function Members() {
                       <div>
                         <h3 className="font-semibold">{member.full_name}</h3>
                         <p className="text-xs text-[#9CA3AF] capitalize">{member.role.replace('_', ' ')}</p>
+                        <span
+                          className="inline-block mt-1 text-xs px-2 py-0.5 rounded-full font-medium capitalize"
+                          style={membershipStatusStyle(member.membership_status || 'active')}
+                        >
+                          {member.membership_status || 'active'}
+                        </span>
                       </div>
                     </div>
                     {canManageMembers && (
@@ -285,6 +308,7 @@ function AddMemberModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
     email: '',
     full_name: '',
     role: 'member' as Profile['role'],
+    membership_status: 'active' as 'active' | 'resigned' | 'expired' | 'terminated',
     house_id: '',
     zone: '',
     business: '',
@@ -334,6 +358,7 @@ function AddMemberModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
           password: '147852369',
           full_name: formData.full_name,
           role: formData.role,
+          membership_status: formData.membership_status,
           house_id: formData.house_id || null,
           zone: formData.zone || null,
           business: formData.business || null,
@@ -429,6 +454,18 @@ function AddMemberModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
               </select>
             </div>
             <div>
+              <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Membership Status *</label>
+              <select
+                value={formData.membership_status}
+                onChange={(e) => setFormData({ ...formData, membership_status: e.target.value as typeof formData.membership_status })}
+                className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white focus:outline-none input-glow"
+              >
+                {MEMBERSHIP_STATUSES.map(s => (
+                  <option key={s} value={s} className="capitalize">{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                ))}
+              </select>
+            </div>
+            <div>
               <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">House</label>
               <select
                 value={formData.house_id}
@@ -517,6 +554,7 @@ function EditMemberModal({ member, onClose, onSuccess }: { member: Profile & { h
     email: member.email,
     full_name: member.full_name,
     role: member.role,
+    membership_status: (member.membership_status || 'active') as 'active' | 'resigned' | 'expired' | 'terminated',
     house_id: member.house_id || '',
     zone: member.zone || '',
     business: member.business || '',
@@ -582,6 +620,7 @@ function EditMemberModal({ member, onClose, onSuccess }: { member: Profile & { h
         email: formData.email,
         full_name: formData.full_name,
         role: formData.role,
+        membership_status: formData.membership_status,
         keywords: keywordsArray,
         house_id: formData.house_id || null,
         zone: formData.zone || null,
@@ -660,6 +699,18 @@ function EditMemberModal({ member, onClose, onSuccess }: { member: Profile & { h
                 <option value="zone_admin">Zone Admin</option>
                 <option value="global_admin">Global Admin</option>
                 <option value="super_admin">Super Admin</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Membership Status *</label>
+              <select
+                value={formData.membership_status}
+                onChange={(e) => setFormData({ ...formData, membership_status: e.target.value as typeof formData.membership_status })}
+                className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white focus:outline-none input-glow"
+              >
+                {MEMBERSHIP_STATUSES.map(s => (
+                  <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                ))}
               </select>
             </div>
             <div>
@@ -813,6 +864,12 @@ function MemberDetailModal({
             <div>
               <h3 className="text-2xl font-bold">{member.full_name}</h3>
               <p className="text-[#9CA3AF] capitalize">{member.role.replace('_', ' ')}</p>
+              <span
+                className="inline-block mt-2 text-xs px-3 py-1 rounded-full font-medium capitalize"
+                style={membershipStatusStyle(member.membership_status || 'active')}
+              >
+                {member.membership_status || 'active'}
+              </span>
             </div>
           </div>
 

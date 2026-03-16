@@ -11,6 +11,7 @@ interface RequestBody {
   password: string;
   full_name: string;
   role?: string;
+  membership_status?: string;
   house_id?: string | null;
   zone?: string | null;
   business?: string | null;
@@ -99,7 +100,8 @@ Deno.serve(async (req: Request) => {
     const updateData: any = {
       full_name: body.full_name,
       role: body.role || 'member',
-      approval_status: 'approved', // Admin-created members are auto-approved
+      membership_status: body.membership_status || 'active',
+      approval_status: 'approved',
       house_id: body.house_id || null,
       zone: body.zone || null,
       business: body.business || null,

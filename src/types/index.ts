@@ -6,6 +6,7 @@ export interface Profile {
   full_name: string;
   role: UserRole;
   approval_status?: 'pending' | 'approved' | 'rejected';
+  membership_status?: 'active' | 'resigned' | 'expired' | 'terminated';
   house_id?: string;
   zone?: string;
   business?: string;
