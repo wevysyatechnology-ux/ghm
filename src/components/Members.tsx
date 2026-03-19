@@ -5,8 +5,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { Profile, House } from '../types';
 import * as XLSX from 'xlsx';
 
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
 const MEMBERSHIP_STATUSES = ['active', 'resigned', 'expired', 'terminated'] as const;
 
 function membershipStatusStyle(status: string) {
@@ -255,7 +253,6 @@ export default function Members() {
         <ImportMembersModal
           onClose={() => setShowImportModal(false)}
           onSuccess={() => {
-            setShowImportModal(false);
             fetchMembers();
           }}
         />
@@ -339,19 +336,22 @@ function AddMemberModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
         .map(k => k.trim())
         .filter(k => k.length > 0);
 
-      // Get a fresh session for authorization
-      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-      if (refreshError) throw refreshError;
-      const session = refreshData.session;
-      if (!session) throw new Error('Not authenticated');
-      if (!session.access_token) throw new Error('Missing access token');
-      if (!supabaseAnonKey) throw new Error('Missing Supabase anon key');
+      // Ensure caller is authenticated; Supabase client will attach session auth for function invoke.
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData.user) {
+        throw new Error('Session expired or invalid. Please sign out and sign in again.');
+      }
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) {
+        throw new Error('Missing session token. Please sign out and sign in again.');
+      }
 
       // Call edge function to create user with admin privileges
       const { data, error } = await supabase.functions.invoke('create-member', {
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          apikey: supabaseAnonKey,
+          Authorization: `Bearer ${accessToken}`,
         },
         body: {
           email: formData.email,
@@ -387,7 +387,12 @@ function AddMemberModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
       onSuccess();
     } catch (err: any) {
       console.error('Create member error:', err);
-      setError(err.message || 'Failed to create member');
+      const message = String(err?.message || 'Failed to create member');
+      if (message.toLowerCase().includes('invalid jwt') || message.toLowerCase().includes('session')) {
+        setError('Your login session is invalid or expired. Please sign out, sign in again, and retry.');
+      } else {
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }
@@ -1072,6 +1077,13 @@ interface ImportMember {
   errors?: string[];
 }
 
+interface ImportResultRow {
+  email: string;
+  full_name: string;
+  status: 'created' | 'already_exists' | 'failed';
+  message: string;
+}
+
 function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1079,6 +1091,7 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
   const [parsedData, setParsedData] = useState<ImportMember[]>([]);
   const [validData, setValidData] = useState<ImportMember[]>([]);
   const [invalidData, setInvalidData] = useState<ImportMember[]>([]);
+  const [importResults, setImportResults] = useState<ImportResultRow[]>([]);
   const [houses, setHouses] = useState<House[]>([]);
 
   useEffect(() => {
@@ -1107,7 +1120,7 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
         'Full Name': 'Jane Smith',
         'Email': 'jane@example.com',
         'Mobile': '9876543211',
-        'Role': '',
+        'Role': 'member',
         'House': 'Another House',
         'Zone': 'North Zone',
         'Business': 'Consulting Services',
@@ -1144,6 +1157,7 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
       }
       setFile(selectedFile);
       setError('');
+      setImportResults([]);
       parseFile(selectedFile);
     }
   };
@@ -1188,8 +1202,8 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
         if (member.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(member.email)) {
           member.errors!.push('Invalid email format');
         }
-        if (!['member', 'house_admin', 'zone_admin', 'global_admin', 'super_admin'].includes(member.role)) {
-          member.errors!.push('Invalid role');
+        if (member.role !== 'member') {
+          member.errors!.push('Only member role is allowed for bulk import');
         }
 
         return member;
@@ -1214,19 +1228,23 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
 
     setLoading(true);
     setError('');
+    setImportResults([]);
 
     try {
-      // Get a fresh session for authorization
-      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-      if (refreshError) throw refreshError;
-      const session = refreshData.session;
-      if (!session) throw new Error('Not authenticated');
-      if (!session.access_token) throw new Error('Missing access token');
-      if (!supabaseAnonKey) throw new Error('Missing Supabase anon key');
+      // Ensure caller is authenticated; Supabase client will attach session auth for function invoke.
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData.user) {
+        throw new Error('Session expired or invalid. Please sign out and sign in again.');
+      }
 
-      // Create auth users using edge function
-      let successCount = 0;
-      let failCount = 0;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) {
+        throw new Error('Missing session token. Please sign out and sign in again.');
+      }
+
+      // Create auth users using edge function and track per-row results
+      const results: ImportResultRow[] = [];
 
       for (const member of validData) {
         try {
@@ -1234,14 +1252,14 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
           
           const { data, error } = await supabase.functions.invoke('create-member', {
             headers: {
-              Authorization: `Bearer ${session.access_token}`,
-              apikey: supabaseAnonKey,
+              Authorization: `Bearer ${accessToken}`,
             },
             body: {
               email: memberData.email,
               password: '147852369',
               full_name: memberData.full_name,
-              role: memberData.role || 'member',
+              role: 'member',
+              membership_status: 'active',
               house_id: memberData.house_id || null,
               zone: memberData.zone || null,
               business: memberData.business || null,
@@ -1252,24 +1270,70 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
           });
 
           if (error || !data?.success) {
+            let rawErrorMessage = data?.error || (error as any)?.message || 'Failed to create member';
+            const contextResponse = (error as any)?.context;
+            if (contextResponse && typeof contextResponse.json === 'function') {
+              try {
+                const payload = await contextResponse.json();
+                rawErrorMessage = payload?.error || payload?.message || rawErrorMessage;
+              } catch {
+                // ignore parse failure and keep fallback error
+              }
+            }
+
+            const normalized = String(rawErrorMessage).toLowerCase();
+            const alreadyExists =
+              normalized.includes('already registered') ||
+              normalized.includes('already exists') ||
+              normalized.includes('duplicate') ||
+              normalized.includes('unique');
+
+            const finalMessage =
+              normalized.includes('invalid jwt') || normalized.includes('jwt')
+                ? 'Invalid/expired login session. Please sign out and sign in again, then retry import.'
+                : String(rawErrorMessage);
+
             console.error(`Failed to create member ${memberData.email}:`, error || data?.error);
-            failCount++;
+            results.push({
+              email: memberData.email,
+              full_name: memberData.full_name,
+              status: alreadyExists ? 'already_exists' : 'failed',
+              message: finalMessage,
+            });
           } else {
-            successCount++;
+            results.push({
+              email: memberData.email,
+              full_name: memberData.full_name,
+              status: 'created',
+              message: 'User created and activated successfully',
+            });
           }
-        } catch (err) {
+        } catch (err: any) {
           console.error(`Failed to create member ${member.email}:`, err);
-          failCount++;
+          results.push({
+            email: member.email,
+            full_name: member.full_name,
+            status: 'failed',
+            message: err?.message || 'Unexpected error',
+          });
         }
       }
 
-      if (successCount > 0) {
+      setImportResults(results);
+
+      const createdCount = results.filter((r) => r.status === 'created').length;
+      if (createdCount > 0) {
         onSuccess();
       } else {
-        throw new Error(`Failed to import members. ${failCount} failed.`);
+        setError('No members were created. Please review the summary below.');
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to import members');
+      const message = String(err?.message || 'Failed to import members');
+      if (message.toLowerCase().includes('invalid jwt') || message.toLowerCase().includes('refresh')) {
+        setError('Your login session is invalid or expired. Please sign out, sign in again, and retry import.');
+      } else {
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }
@@ -1293,7 +1357,7 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
             <div>
               <p className="font-medium mb-1">Need a template?</p>
               <p className="text-sm text-[#9CA3AF]">Download our Excel template to get started</p>
-              <p className="text-xs text-[#6B7280] mt-1">Note: If Role column is empty, it will default to "member"</p>
+              <p className="text-xs text-[#6B7280] mt-1">Note: Only "member" role is allowed for bulk import (mobile app users)</p>
             </div>
             <button
               onClick={downloadTemplate}
@@ -1385,6 +1449,73 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
                             <td className="py-2 px-3">{member.full_name || '(empty)'}</td>
                             <td className="py-2 px-3">{member.email || '(empty)'}</td>
                             <td className="py-2 px-3 text-red-400 text-xs">{member.errors?.join(', ')}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {importResults.length > 0 && (
+                <div>
+                  <h3 className="font-medium mb-2">Import Summary</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                    <div className="p-3 rounded-xl bg-green-900/20 border border-green-800/50">
+                      <p className="text-xs text-[#9CA3AF]">Created</p>
+                      <p className="text-xl font-bold text-green-400">{importResults.filter((r) => r.status === 'created').length}</p>
+                    </div>
+                    <div className="p-3 rounded-xl bg-yellow-900/20 border border-yellow-800/50">
+                      <p className="text-xs text-[#9CA3AF]">Already Exists</p>
+                      <p className="text-xl font-bold text-yellow-300">{importResults.filter((r) => r.status === 'already_exists').length}</p>
+                    </div>
+                    <div className="p-3 rounded-xl bg-red-900/20 border border-red-800/50">
+                      <p className="text-xs text-[#9CA3AF]">Failed</p>
+                      <p className="text-xl font-bold text-red-400">{importResults.filter((r) => r.status === 'failed').length}</p>
+                    </div>
+                  </div>
+
+                  <div className="max-h-52 overflow-y-auto rounded-xl border border-gray-800">
+                    <table className="w-full text-sm">
+                      <thead className="bg-[#0F1412] sticky top-0">
+                        <tr>
+                          <th className="text-left py-2 px-3 text-[#9CA3AF]">Name</th>
+                          <th className="text-left py-2 px-3 text-[#9CA3AF]">Email</th>
+                          <th className="text-left py-2 px-3 text-[#9CA3AF]">Status</th>
+                          <th className="text-left py-2 px-3 text-[#9CA3AF]">Reason</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {importResults.map((row, index) => (
+                          <tr key={`${row.email}-${index}`} className="border-t border-gray-800/50">
+                            <td className="py-2 px-3">{row.full_name || '(empty)'}</td>
+                            <td className="py-2 px-3 text-[#9CA3AF]">{row.email || '(empty)'}</td>
+                            <td className="py-2 px-3">
+                              <span
+                                className="inline-block text-xs px-2 py-0.5 rounded-full font-medium"
+                                style={{
+                                  backgroundColor:
+                                    row.status === 'created'
+                                      ? 'rgba(74, 222, 128, 0.15)'
+                                      : row.status === 'already_exists'
+                                        ? 'rgba(251, 191, 36, 0.15)'
+                                        : 'rgba(239, 68, 68, 0.15)',
+                                  color:
+                                    row.status === 'created'
+                                      ? '#4ADE80'
+                                      : row.status === 'already_exists'
+                                        ? '#FBBF24'
+                                        : '#EF4444',
+                                }}
+                              >
+                                {row.status === 'created'
+                                  ? 'Created'
+                                  : row.status === 'already_exists'
+                                    ? 'Already Exists'
+                                    : 'Failed'}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 text-[#9CA3AF]">{row.message}</td>
                           </tr>
                         ))}
                       </tbody>
