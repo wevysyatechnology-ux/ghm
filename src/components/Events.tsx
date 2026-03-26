@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { Plus, Calendar, MapPin, Link2, Globe, Home, Building2, Map, QrCode, Radio, X, Users, CheckCircle, Clock } from 'lucide-react';
+import QRCode from 'qrcode';
 import { supabase } from '../lib/supabase';
 import { GHMEvent } from '../types';
 import { useAuth } from '../contexts/AuthContext';
@@ -16,84 +17,21 @@ const LEVEL_CONFIG = {
   global:  { label: 'Global',  color: '#F472B6', bg: 'rgba(244,114,182,0.1)',Icon: Globe },
 } as const;
 
-function generateQRModules(data: string): boolean[][] {
-  const version = 3;
-  const size = 17 + version * 4;
-  const modules: boolean[][] = Array.from({ length: size }, () => Array(size).fill(false));
-
-  const setFinder = (row: number, col: number) => {
-    for (let r = -1; r <= 7; r++) {
-      for (let c = -1; c <= 7; c++) {
-        const pr = row + r; const pc = col + c;
-        if (pr < 0 || pr >= size || pc < 0 || pc >= size) continue;
-        const onBorder = r === -1 || r === 7 || c === -1 || c === 7;
-        const inner = r >= 2 && r <= 4 && c >= 2 && c <= 4;
-        modules[pr][pc] = onBorder || inner;
-      }
-    }
-  };
-  setFinder(0, 0);
-  setFinder(0, size - 7);
-  setFinder(size - 7, 0);
-
-  for (let i = 0; i < size; i++) {
-    modules[6][i] = i % 2 === 0;
-    modules[i][6] = i % 2 === 0;
-  }
-
-  let encoded = '';
-  for (let i = 0; i < data.length; i++) {
-    encoded += data.charCodeAt(i).toString(2).padStart(8, '0');
-  }
-  encoded = encoded.padEnd(size * size, '0');
-
-  let bit = 0;
-  let goUp = true;
-  for (let col = size - 1; col >= 0; col -= 2) {
-    if (col === 6) col--;
-    for (let delta = 0; delta < size; delta++) {
-      const row = goUp ? size - 1 - delta : delta;
-      if (
-        [0,1,2,3,4,5,6,7,size-8,size-7].includes(row) &&
-        [0,1,2,3,4,5,6,7,size-8,size-7].includes(col)
-      ) continue;
-      if (bit < encoded.length) {
-        modules[row][col] = encoded[bit++] === '1';
-      }
-    }
-    goUp = !goUp;
-  }
-  return modules;
-}
-
-function QRCodeCanvas({ token, size = 180 }: { token: string; size?: number }) {
+function QRCodeCanvas({ token, size = 200 }: { token: string; size?: number }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const url = `${window.location.origin}/attend?token=${token}`;
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const s = size;
-    canvas.width = s;
-    canvas.height = s;
-
-    const modules = generateQRModules(url);
-    const n = modules.length;
-    const cell = s / n;
-
-    ctx.fillStyle = '#0B0F0E';
-    ctx.fillRect(0, 0, s, s);
-    ctx.fillStyle = '#4ADE80';
-    for (let r = 0; r < n; r++) {
-      for (let c = 0; c < n; c++) {
-        if (modules[r][c]) {
-          ctx.fillRect(Math.floor(c * cell), Math.floor(r * cell), Math.ceil(cell), Math.ceil(cell));
-        }
-      }
-    }
+    QRCode.toCanvas(canvas, url, {
+      width: size,
+      margin: 2,
+      color: {
+        dark: '#4ADE80',
+        light: '#0B0F0E',
+      },
+    });
   }, [token, size, url]);
 
   return <canvas ref={canvasRef} style={{ display: 'block', borderRadius: 4 }} />;
