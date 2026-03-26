@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ClipboardList, Users, CheckCircle, Clock, XCircle, Home, Download, Filter, ChevronDown } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -84,25 +85,54 @@ export default function Attendance() {
     }
   };
 
+  const [exportOpen, setExportOpen] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+        setExportOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const getExportRows = () => {
+    return records.map(r => ({
+      Name: r.member?.full_name || '—',
+      House: r.member?.house?.name || '—',
+      Status: r.status,
+      'Check-in Time': r.status === 'absent' ? '—' : new Date(r.checked_in_at).toLocaleString('en-IN'),
+      Method: r.check_in_method,
+    }));
+  };
+
   const exportCSV = () => {
     if (!records.length) return;
     const ev = events.find(e => e.id === selectedEventId);
-    const rows = [
-      ['Name', 'House', 'Status', 'Check-in Time', 'Method'],
-      ...records.map(r => [
-        r.member?.full_name || '—',
-        r.member?.house?.name || '—',
-        r.status,
-        new Date(r.checked_in_at).toLocaleString('en-IN'),
-        r.check_in_method,
-      ])
-    ];
-    const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+    const rows = getExportRows();
+    const headers = Object.keys(rows[0]);
+    const csv = [
+      headers.map(h => `"${h}"`).join(','),
+      ...rows.map(r => headers.map(h => `"${(r as any)[h]}"`).join(','))
+    ].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `attendance-${ev?.title || 'event'}.csv`;
     a.click();
+    setExportOpen(false);
+  };
+
+  const exportExcel = () => {
+    if (!records.length) return;
+    const ev = events.find(e => e.id === selectedEventId);
+    const ws = XLSX.utils.json_to_sheet(getExportRows());
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
+    XLSX.writeFile(wb, `attendance-${ev?.title || 'event'}.xlsx`);
+    setExportOpen(false);
   };
 
   const filtered = filterStatus === 'all' ? records : records.filter(r => r.status === filterStatus);
@@ -145,14 +175,36 @@ export default function Attendance() {
           <p className="text-[#9CA3AF]">QR-based event attendance tracking</p>
         </div>
         {records.length > 0 && (
-          <button
-            onClick={exportCSV}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all hover:brightness-110"
-            style={{ backgroundColor: 'rgba(74,222,128,0.1)', color: '#4ADE80', border: '1px solid rgba(74,222,128,0.25)' }}
-          >
-            <Download className="w-4 h-4" />
-            Export CSV
-          </button>
+          <div className="relative" ref={exportRef}>
+            <button
+              onClick={() => setExportOpen(o => !o)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all hover:brightness-110"
+              style={{ backgroundColor: 'rgba(74,222,128,0.1)', color: '#4ADE80', border: '1px solid rgba(74,222,128,0.25)' }}
+            >
+              <Download className="w-4 h-4" />
+              Export
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${exportOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {exportOpen && (
+              <div className="absolute right-0 mt-2 w-44 rounded-xl border border-gray-700/60 bg-[#111815] shadow-xl z-20 overflow-hidden">
+                <button
+                  onClick={exportCSV}
+                  className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-[#E5E7EB] hover:bg-[#1A2420] transition-colors"
+                >
+                  <Download className="w-4 h-4 text-[#4ADE80]" />
+                  Export as CSV
+                </button>
+                <div className="h-px bg-gray-800/60" />
+                <button
+                  onClick={exportExcel}
+                  className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-[#E5E7EB] hover:bg-[#1A2420] transition-colors"
+                >
+                  <Download className="w-4 h-4 text-[#34D399]" />
+                  Export as Excel
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
