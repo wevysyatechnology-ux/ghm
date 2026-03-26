@@ -112,6 +112,42 @@ export interface Attendance {
   marked_by_profile?: Profile;
 }
 
+export interface GHMEvent {
+  id: string;
+  title: string;
+  description: string | null;
+  event_date: string;
+  event_time: string | null;
+  location: string | null;
+  meeting_link: string | null;
+  event_level: 'house' | 'zone' | 'state' | 'country' | 'global';
+  house_id: string | null;
+  zone: string | null;
+  state: string | null;
+  country: string | null;
+  send_notification: boolean;
+  qr_token: string | null;
+  qr_expires_at: string | null;
+  is_live: boolean;
+  max_late_minutes: number;
+  created_at: string;
+  house?: { name: string } | null;
+}
+
+export interface EventAttendance {
+  id: string;
+  event_id: string;
+  member_id: string;
+  status: 'present' | 'late' | 'absent';
+  checked_in_at: string;
+  check_in_method: 'qr' | 'manual' | 'geo';
+  marked_by: string | null;
+  notes: string | null;
+  created_at: string;
+  member?: Profile;
+  marked_by_profile?: Profile;
+}
+
 export interface DashboardStats {
   houses: number;
   members: number;

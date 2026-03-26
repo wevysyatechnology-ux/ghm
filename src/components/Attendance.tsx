@@ -1,211 +1,306 @@
 import { useEffect, useState } from 'react';
-import { Plus, ClipboardList } from 'lucide-react';
+import { ClipboardList, Users, CheckCircle, Clock, XCircle, Home, Download, Filter, ChevronDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { Attendance as AttendanceType, Profile } from '../types';
+
+interface EventRow {
+  id: string;
+  title: string;
+  event_date: string;
+  event_time: string | null;
+  event_level: string;
+  is_live: boolean;
+  house?: { name: string } | null;
+}
+
+interface AttendanceRow {
+  id: string;
+  event_id: string;
+  member_id: string;
+  status: 'present' | 'late' | 'absent';
+  checked_in_at: string;
+  check_in_method: 'qr' | 'manual' | 'geo';
+  member?: { full_name: string; house?: { name: string } | null } | null;
+}
+
+interface HouseStats {
+  house: string;
+  present: number;
+  late: number;
+  absent: number;
+}
 
 export default function Attendance() {
   const { profile } = useAuth();
-  const [attendance, setAttendance] = useState<AttendanceType[]>([]);
+  const [events, setEvents] = useState<EventRow[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState<string>('');
+  const [records, setRecords] = useState<AttendanceRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [recordsLoading, setRecordsLoading] = useState(false);
+  const [filterStatus, setFilterStatus] = useState<'all' | 'present' | 'late' | 'absent'>('all');
 
-  const canMarkAttendance = profile?.role && ['super_admin', 'global_admin', 'house_admin'].includes(profile.role);
+  const isAdmin = profile?.role && ['super_admin', 'global_admin', 'zone_admin', 'house_admin'].includes(profile.role);
 
   useEffect(() => {
-    fetchAttendance();
+    fetchEvents();
   }, []);
 
-  const fetchAttendance = async () => {
+  useEffect(() => {
+    if (selectedEventId) fetchRecords(selectedEventId);
+    else setRecords([]);
+  }, [selectedEventId]);
+
+  const fetchEvents = async () => {
     try {
       const { data, error } = await supabase
-        .from('attendance')
-        .select(`
-          *,
-          member:member_id(full_name),
-          marked_by_profile:marked_by(full_name)
-        `)
-        .order('created_at', { ascending: false });
-
+        .from('events')
+        .select('id, title, event_date, event_time, event_level, is_live, house:house_id(name)')
+        .order('event_date', { ascending: false });
       if (error) throw error;
-      setAttendance(data || []);
-    } catch (error) {
-      console.error('Error fetching attendance:', error);
+      const evs = data || [];
+      setEvents(evs);
+      if (evs.length > 0) setSelectedEventId(evs[0].id);
+    } catch (err) {
+      console.error('Error fetching events:', err);
     } finally {
       setLoading(false);
     }
   };
+
+  const fetchRecords = async (eventId: string) => {
+    setRecordsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('event_attendance')
+        .select('*, member:member_id(full_name, house:house_id(name))')
+        .eq('event_id', eventId)
+        .order('checked_in_at', { ascending: true });
+      if (error) throw error;
+      setRecords(data || []);
+    } catch (err) {
+      console.error('Error fetching attendance records:', err);
+    } finally {
+      setRecordsLoading(false);
+    }
+  };
+
+  const exportCSV = () => {
+    if (!records.length) return;
+    const ev = events.find(e => e.id === selectedEventId);
+    const rows = [
+      ['Name', 'House', 'Status', 'Check-in Time', 'Method'],
+      ...records.map(r => [
+        r.member?.full_name || '—',
+        r.member?.house?.name || '—',
+        r.status,
+        new Date(r.checked_in_at).toLocaleString('en-IN'),
+        r.check_in_method,
+      ])
+    ];
+    const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `attendance-${ev?.title || 'event'}.csv`;
+    a.click();
+  };
+
+  const filtered = filterStatus === 'all' ? records : records.filter(r => r.status === filterStatus);
+
+  const houseStats: HouseStats[] = [];
+  const houseMap: Record<string, HouseStats> = {};
+  for (const r of records) {
+    const house = r.member?.house?.name || 'Unknown';
+    if (!houseMap[house]) {
+      houseMap[house] = { house, present: 0, late: 0, absent: 0 };
+      houseStats.push(houseMap[house]);
+    }
+    houseMap[house][r.status]++;
+  }
+
+  const counts = {
+    present: records.filter(r => r.status === 'present').length,
+    late:    records.filter(r => r.status === 'late').length,
+    absent:  records.filter(r => r.status === 'absent').length,
+  };
+
+  const selectedEvent = events.find(e => e.id === selectedEventId);
+
+  if (!isAdmin) {
+    return (
+      <div className="p-8 flex items-center justify-center">
+        <div className="text-center text-[#6B7280]">
+          <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-40" />
+          <p>Attendance data is available to administrators only.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 space-y-6 animate-fade-in">
       <div className="flex items-center justify-between animate-slide-up">
         <div>
           <h1 className="text-3xl font-bold mb-2">Attendance</h1>
-          <p className="text-[#9CA3AF]">Event attendance tracking</p>
+          <p className="text-[#9CA3AF]">QR-based event attendance tracking</p>
         </div>
-        {canMarkAttendance && (
+        {records.length > 0 && (
           <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center space-x-2 px-6 py-3 rounded-xl font-medium transition-all-smooth glow-green-sm hover:glow-green hover:scale-105 active:scale-95"
-            style={{ backgroundColor: '#4ADE80', color: '#0B0F0E' }}
+            onClick={exportCSV}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all hover:brightness-110"
+            style={{ backgroundColor: 'rgba(74,222,128,0.1)', color: '#4ADE80', border: '1px solid rgba(74,222,128,0.25)' }}
           >
-            <Plus className="w-5 h-5" />
-            <span>Mark Attendance</span>
+            <Download className="w-4 h-4" />
+            Export CSV
           </button>
         )}
       </div>
 
-      <div className="bg-card rounded-2xl p-6 border border-gray-800/50">
-        {loading ? (
-          <div className="space-y-4">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-20 bg-[#0F1412] rounded-xl animate-pulse" />
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {attendance.map((record) => (
-              <div
-                key={record.id}
-                className="bg-[#0F1412] rounded-xl p-4 border border-gray-800/50 hover:border-gray-700 transition-all"
-              >
-                <div className="flex items-start space-x-4">
-                  <div className="p-2 rounded-lg" style={{ backgroundColor: 'rgba(74, 222, 128, 0.1)' }}>
-                    <ClipboardList className="w-5 h-5" style={{ color: '#4ADE80' }} />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="font-semibold">{record.event_name}</h3>
-                      <span className="text-sm text-[#6B7280]">
-                        {new Date(record.created_at).toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-4 text-sm text-[#9CA3AF]">
-                      <span>Member: {record.member?.full_name}</span>
-                      <span>Marked by: {record.marked_by_profile?.full_name}</span>
-                    </div>
-                  </div>
-                </div>
+      {loading ? (
+        <div className="space-y-4">
+          {[...Array(3)].map((_, i) => <div key={i} className="h-24 bg-card rounded-2xl animate-pulse" />)}
+        </div>
+      ) : events.length === 0 ? (
+        <div className="bg-card rounded-2xl p-12 border border-gray-800/50 text-center text-[#6B7280]">
+          <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-40" />
+          <p>No events found. Create an event first.</p>
+        </div>
+      ) : (
+        <>
+          <div className="bg-card rounded-2xl p-4 border border-gray-800/50">
+            <div className="flex items-center gap-3">
+              <Filter className="w-4 h-4 text-[#9CA3AF] shrink-0" />
+              <div className="relative flex-1">
+                <select
+                  value={selectedEventId}
+                  onChange={e => setSelectedEventId(e.target.value)}
+                  className="w-full appearance-none bg-[#0F1412] border border-gray-800 text-white rounded-xl px-4 py-2.5 pr-10 text-sm focus:outline-none focus:border-[#4ADE80]/50 cursor-pointer"
+                >
+                  {events.map(ev => (
+                    <option key={ev.id} value={ev.id}>
+                      {ev.title} — {new Date(ev.event_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      {ev.is_live ? ' (LIVE)' : ''}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6B7280] pointer-events-none" />
               </div>
-            ))}
-
-            {attendance.length === 0 && (
-              <div className="text-center py-12 text-[#6B7280]">
-                No attendance records yet
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {showAddModal && (
-        <AddAttendanceModal
-          onClose={() => setShowAddModal(false)}
-          onSuccess={() => {
-            setShowAddModal(false);
-            fetchAttendance();
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-function AddAttendanceModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
-  const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [formData, setFormData] = useState({
-    event_name: '',
-    member_id: '',
-  });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    fetchProfiles();
-  }, []);
-
-  const fetchProfiles = async () => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, full_name')
-      .order('full_name');
-    setProfiles(data || []);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-
-    try {
-      const { error } = await supabase.from('attendance').insert([formData]);
-      if (error) throw error;
-      onSuccess();
-    } catch (err: any) {
-      setError(err.message || 'Failed to mark attendance');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-card rounded-2xl p-8 border border-gray-800/50 max-w-md w-full">
-        <h2 className="text-2xl font-bold mb-6">Mark Attendance</h2>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Event Name</label>
-            <input
-              type="text"
-              value={formData.event_name}
-              onChange={(e) => setFormData({ ...formData, event_name: e.target.value })}
-              className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow"
-              placeholder="Weekly Meeting, Workshop, etc."
-              required
-            />
+            </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Member</label>
-            <select
-              value={formData.member_id}
-              onChange={(e) => setFormData({ ...formData, member_id: e.target.value })}
-              className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white focus:outline-none input-glow"
-              required
-            >
-              <option value="">Select member</option>
-              {profiles.map((p) => (
-                <option key={p.id} value={p.id}>{p.full_name}</option>
+          {selectedEvent && (
+            <div className="grid grid-cols-3 gap-4">
+              {[
+                { label: 'Present', key: 'present', count: counts.present, color: '#4ADE80', bg: 'rgba(74,222,128,0.1)', Icon: CheckCircle },
+                { label: 'Late',    key: 'late',    count: counts.late,    color: '#FBBF24', bg: 'rgba(251,191,36,0.1)', Icon: Clock },
+                { label: 'Absent',  key: 'absent',  count: counts.absent,  color: '#F87171', bg: 'rgba(248,113,113,0.1)', Icon: XCircle },
+              ].map(({ label, key, count, color, bg, Icon }) => (
+                <button
+                  key={key}
+                  onClick={() => setFilterStatus(filterStatus === key as any ? 'all' : key as any)}
+                  className="bg-card rounded-2xl p-5 border text-left transition-all hover:brightness-110"
+                  style={{ borderColor: filterStatus === key ? color : 'rgba(255,255,255,0.06)' }}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="p-1.5 rounded-lg" style={{ backgroundColor: bg }}>
+                      <Icon className="w-4 h-4" style={{ color }} />
+                    </div>
+                    <span className="text-sm text-[#9CA3AF]">{label}</span>
+                  </div>
+                  <p className="text-2xl font-bold" style={{ color }}>{count}</p>
+                </button>
               ))}
-            </select>
-          </div>
-
-          {error && (
-            <div className="p-3 rounded-xl bg-red-900/20 border border-red-800/50 text-red-400 text-sm">
-              {error}
             </div>
           )}
 
-          <div className="flex space-x-4 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-6 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white hover:bg-[#14532D] transition-all"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex-1 px-6 py-3 rounded-xl font-medium transition-all disabled:opacity-50 glow-green-sm hover:glow-green"
-              style={{ backgroundColor: '#4ADE80', color: '#0B0F0E' }}
-            >
-              {loading ? 'Marking...' : 'Mark Attendance'}
-            </button>
+          {houseStats.length > 1 && (
+            <div className="bg-card rounded-2xl p-5 border border-gray-800/50">
+              <div className="flex items-center gap-2 mb-4">
+                <Home className="w-4 h-4 text-[#9CA3AF]" />
+                <h3 className="font-semibold text-sm">House-wise Breakdown</h3>
+              </div>
+              <div className="space-y-3">
+                {houseStats.map(hs => {
+                  const total = hs.present + hs.late + hs.absent;
+                  const pct = total > 0 ? Math.round(((hs.present + hs.late) / total) * 100) : 0;
+                  return (
+                    <div key={hs.house} className="flex items-center gap-3">
+                      <span className="text-sm text-[#9CA3AF] w-32 truncate shrink-0">{hs.house}</span>
+                      <div className="flex-1 h-2 rounded-full bg-gray-800 overflow-hidden">
+                        <div className="h-full rounded-full bg-[#4ADE80] transition-all duration-500" style={{ width: `${pct}%` }} />
+                      </div>
+                      <div className="flex items-center gap-2 text-xs shrink-0">
+                        <span className="text-[#4ADE80]">{hs.present}P</span>
+                        {hs.late > 0 && <span className="text-yellow-400">{hs.late}L</span>}
+                        <span className="text-[#6B7280]">{pct}%</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="bg-card rounded-2xl border border-gray-800/50">
+            <div className="flex items-center gap-2 p-5 border-b border-gray-800/50">
+              <Users className="w-4 h-4 text-[#9CA3AF]" />
+              <h3 className="font-semibold text-sm">
+                {filterStatus === 'all' ? 'All Check-ins' : `${filterStatus.charAt(0).toUpperCase() + filterStatus.slice(1)} Members`}
+              </h3>
+              <span className="ml-auto text-xs text-[#6B7280]">{filtered.length} records</span>
+              {filterStatus !== 'all' && (
+                <button onClick={() => setFilterStatus('all')} className="text-xs text-[#4ADE80] hover:underline">Clear</button>
+              )}
+            </div>
+
+            {recordsLoading ? (
+              <div className="p-6 space-y-3">
+                {[...Array(4)].map((_, i) => <div key={i} className="h-14 bg-[#0F1412] rounded-xl animate-pulse" />)}
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="p-10 text-center">
+                <ClipboardList className="w-10 h-10 mx-auto mb-3 text-[#374151]" />
+                <p className="text-[#6B7280] text-sm">
+                  {records.length === 0
+                    ? selectedEvent?.is_live
+                      ? 'No check-ins yet. Event is live — waiting for members to scan the QR.'
+                      : 'No attendance records for this event.'
+                    : 'No records match the current filter.'}
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-800/50">
+                {filtered.map((r, i) => (
+                  <div key={r.id} className="flex items-center justify-between px-5 py-3.5 hover:bg-[#0F1412]/60 transition-colors">
+                    <div className="flex items-center gap-4">
+                      <span className="text-xs text-[#6B7280] w-6 text-right shrink-0">{i + 1}</span>
+                      <div>
+                        <p className="text-sm font-medium">{r.member?.full_name || '—'}</p>
+                        <p className="text-xs text-[#6B7280]">{r.member?.house?.name || '—'}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+                        r.status === 'present' ? 'bg-[#4ADE80]/10 text-[#4ADE80]' :
+                        r.status === 'late'    ? 'bg-yellow-900/20 text-yellow-400' :
+                                                 'bg-red-900/20 text-red-400'
+                      }`}>{r.status}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        r.check_in_method === 'qr'     ? 'bg-[#60A5FA]/10 text-[#60A5FA]' :
+                        r.check_in_method === 'manual' ? 'bg-gray-800 text-[#9CA3AF]' :
+                                                          'bg-[#F59E0B]/10 text-[#F59E0B]'
+                      }`}>{r.check_in_method}</span>
+                      <span className="text-xs text-[#6B7280]">
+                        {new Date(r.checked_in_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        </form>
-      </div>
+        </>
+      )}
     </div>
   );
 }

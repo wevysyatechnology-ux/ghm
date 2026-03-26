@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { supabase } from './lib/supabase';
 import Login from './components/Login';
 import Signup from './components/Signup';
+import AttendScan from './components/AttendScan';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import Houses from './components/Houses';
@@ -92,6 +93,7 @@ function AppContent() {
   const [currentView, setCurrentView] = useState('dashboard');
   const [connectionTested, setConnectionTested] = useState(false);
   const isSignupRoute = window.location.pathname === '/signup';
+  const isAttendRoute = window.location.pathname === '/attend';
 
   console.log('AppContent state:', { user: !!user, profile: !!profile, loading });
 
@@ -125,6 +127,10 @@ function AppContent() {
         </div>
       </div>
     );
+  }
+
+  if (isAttendRoute) {
+    return <AttendScan />;
   }
 
   if (isSignupRoute) {
