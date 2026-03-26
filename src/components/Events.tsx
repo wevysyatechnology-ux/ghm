@@ -71,10 +71,47 @@ export default function Events() {
     }
     const { error } = await supabase.from('events').update(patch).eq('id', ev.id);
     if (!error) {
+      if (!isGoingLive) {
+        await markAbsentMembers(ev);
+      }
       fetchEvents();
       if (selectedEvent?.id === ev.id) {
         setSelectedEvent({ ...selectedEvent, is_live: isGoingLive, qr_expires_at: patch.qr_expires_at || selectedEvent.qr_expires_at });
       }
+    }
+  };
+
+  const markAbsentMembers = async (ev: GHMEvent) => {
+    const { data: checkedIn } = await supabase
+      .from('event_attendance')
+      .select('member_id')
+      .eq('event_id', ev.id);
+    const checkedInIds = new Set((checkedIn || []).map((r: any) => r.member_id));
+
+    let membersQuery = supabase
+      .from('profiles')
+      .select('id')
+      .eq('approval_status', 'approved')
+      .not('house_id', 'is', null);
+
+    if (ev.event_level === 'house' && ev.house_id) {
+      membersQuery = membersQuery.eq('house_id', ev.house_id);
+    }
+
+    const { data: members } = await membersQuery;
+    if (!members) return;
+
+    const absentRows = members
+      .filter((m: any) => !checkedInIds.has(m.id))
+      .map((m: any) => ({
+        event_id: ev.id,
+        member_id: m.id,
+        status: 'absent',
+        check_in_method: 'qr',
+      }));
+
+    if (absentRows.length > 0) {
+      await supabase.from('event_attendance').insert(absentRows);
     }
   };
 
@@ -238,10 +275,12 @@ function EventDetailModal({ event: ev, onClose, onToggleLive }: {
 }) {
   const [attendees, setAttendees] = useState<any[]>([]);
   const [loadingAttendees, setLoadingAttendees] = useState(true);
+  const [activeTab, setActiveTab] = useState<'checkedin' | 'absent'>('checkedin');
   const cfg = LEVEL_CONFIG[ev.event_level];
   const attendUrl = ev.qr_token ? `${window.location.origin}/attend?token=${ev.qr_token}` : '';
 
-  useEffect(() => {
+  const fetchAttendees = () => {
+    setLoadingAttendees(true);
     supabase
       .from('event_attendance')
       .select('*, member:member_id(full_name, house:house_id(name))')
@@ -251,7 +290,13 @@ function EventDetailModal({ event: ev, onClose, onToggleLive }: {
         setAttendees(data || []);
         setLoadingAttendees(false);
       });
-  }, [ev.id]);
+  };
+
+  useEffect(() => { fetchAttendees(); }, [ev.id]);
+
+  const checkedIn = attendees.filter(a => a.status !== 'absent');
+  const absent    = attendees.filter(a => a.status === 'absent');
+  const sessionEnded = !ev.is_live && ev.qr_expires_at !== null;
 
   return (
     <div className="fixed inset-0 bg-black/85 z-50 overflow-y-auto">
@@ -278,25 +323,32 @@ function EventDetailModal({ event: ev, onClose, onToggleLive }: {
           </div>
 
           <div className="p-6 space-y-5">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-[#0F1412] rounded-xl p-4 border border-gray-800/50 text-center">
-                <div className="flex items-center justify-center gap-2 text-[#4ADE80] mb-1">
-                  <Users className="w-5 h-5" />
-                  <span className="text-2xl font-bold">{attendees.length}</span>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-[#0F1412] rounded-xl p-3 border border-gray-800/50 text-center">
+                <div className="flex items-center justify-center gap-1.5 text-[#4ADE80] mb-1">
+                  <CheckCircle className="w-4 h-4" />
+                  <span className="text-xl font-bold">{checkedIn.length}</span>
                 </div>
-                <p className="text-xs text-[#6B7280]">Members Checked In</p>
+                <p className="text-xs text-[#6B7280]">Checked In</p>
               </div>
-              <div className="bg-[#0F1412] rounded-xl p-4 border border-gray-800/50 text-center">
-                <div className="flex items-center justify-center gap-2 mb-1" style={{ color: cfg.color }}>
-                  <cfg.Icon className="w-5 h-5" />
-                  <span className="text-sm font-semibold">{cfg.label}</span>
+              <div className="bg-[#0F1412] rounded-xl p-3 border border-gray-800/50 text-center">
+                <div className="flex items-center justify-center gap-1.5 text-red-400 mb-1">
+                  <Users className="w-4 h-4" />
+                  <span className="text-xl font-bold">{absent.length}</span>
                 </div>
-                <p className="text-xs text-[#6B7280]">
+                <p className="text-xs text-[#6B7280]">Absent</p>
+              </div>
+              <div className="bg-[#0F1412] rounded-xl p-3 border border-gray-800/50 text-center">
+                <div className="flex items-center justify-center gap-1.5 mb-1" style={{ color: cfg.color }}>
+                  <cfg.Icon className="w-4 h-4" />
+                  <span className="text-xs font-semibold">{cfg.label}</span>
+                </div>
+                <p className="text-xs text-[#6B7280] truncate">
                   {ev.event_level === 'house' && ev.house?.name}
                   {ev.event_level === 'zone' && ev.zone}
                   {ev.event_level === 'state' && ev.state}
                   {ev.event_level === 'country' && ev.country}
-                  {ev.event_level === 'global' && 'All Members'}
+                  {ev.event_level === 'global' && 'Global'}
                 </p>
               </div>
             </div>
@@ -336,41 +388,78 @@ function EventDetailModal({ event: ev, onClose, onToggleLive }: {
 
             {(loadingAttendees || attendees.length > 0) && (
               <div className="bg-[#0F1412] rounded-xl border border-gray-800/50">
-                <div className="flex items-center gap-2 p-4 border-b border-gray-800/50">
-                  <CheckCircle className="w-4 h-4 text-[#4ADE80]" />
-                  <h3 className="font-semibold text-sm">Checked-in Members</h3>
-                  <span className="ml-auto text-xs text-[#6B7280]">{attendees.length} total</span>
+                <div className="flex border-b border-gray-800/50">
+                  <button
+                    onClick={() => setActiveTab('checkedin')}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium transition-colors ${
+                      activeTab === 'checkedin' ? 'text-[#4ADE80] border-b-2 border-[#4ADE80]' : 'text-[#6B7280] hover:text-[#9CA3AF]'
+                    }`}
+                  >
+                    <CheckCircle className="w-3.5 h-3.5" />
+                    Checked In ({checkedIn.length})
+                  </button>
+                  {sessionEnded && (
+                    <button
+                      onClick={() => setActiveTab('absent')}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium transition-colors ${
+                        activeTab === 'absent' ? 'text-red-400 border-b-2 border-red-400' : 'text-[#6B7280] hover:text-[#9CA3AF]'
+                      }`}
+                    >
+                      <Users className="w-3.5 h-3.5" />
+                      Absent ({absent.length})
+                    </button>
+                  )}
                 </div>
                 <div className="divide-y divide-gray-800/50 max-h-52 overflow-y-auto">
                   {loadingAttendees ? (
                     <div className="p-4 text-center text-[#6B7280] text-sm">Loading...</div>
-                  ) : attendees.map((a, i) => (
-                    <div key={a.id} className="flex items-center justify-between px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs text-[#6B7280] w-5 text-right">{i + 1}</span>
-                        <div>
-                          <p className="text-sm font-medium">{a.member?.full_name}</p>
-                          <p className="text-xs text-[#6B7280]">{a.member?.house?.name}</p>
+                  ) : activeTab === 'checkedin' ? (
+                    checkedIn.length === 0 ? (
+                      <div className="p-6 text-center text-[#6B7280] text-sm">No check-ins yet</div>
+                    ) : checkedIn.map((a, i) => (
+                      <div key={a.id} className="flex items-center justify-between px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs text-[#6B7280] w-5 text-right">{i + 1}</span>
+                          <div>
+                            <p className="text-sm font-medium">{a.member?.full_name}</p>
+                            <p className="text-xs text-[#6B7280]">{a.member?.house?.name}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                            a.status === 'present' ? 'bg-[#4ADE80]/10 text-[#4ADE80]' : 'bg-yellow-900/20 text-yellow-400'
+                          }`}>{a.status}</span>
+                          <span className="text-xs text-[#6B7280]">
+                            {new Date(a.checked_in_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                          a.status === 'present' ? 'bg-[#4ADE80]/10 text-[#4ADE80]' :
-                          a.status === 'late'    ? 'bg-yellow-900/20 text-yellow-400' :
-                                                   'bg-red-900/20 text-red-400'
-                        }`}>{a.status}</span>
-                        <span className="text-xs text-[#6B7280]">
-                          {new Date(a.checked_in_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                        </span>
+                    ))
+                  ) : (
+                    absent.length === 0 ? (
+                      <div className="p-6 text-center text-[#6B7280] text-sm">No absent members</div>
+                    ) : absent.map((a, i) => (
+                      <div key={a.id} className="flex items-center justify-between px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs text-[#6B7280] w-5 text-right">{i + 1}</span>
+                          <div>
+                            <p className="text-sm font-medium">{a.member?.full_name}</p>
+                            <p className="text-xs text-[#6B7280]">{a.member?.house?.name}</p>
+                          </div>
+                        </div>
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-900/20 text-red-400">absent</span>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </div>
             )}
 
             <button
-              onClick={() => onToggleLive(ev)}
+              onClick={async () => {
+                await onToggleLive(ev);
+                setTimeout(fetchAttendees, 1500);
+              }}
               className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-medium transition-all ${
                 ev.is_live
                   ? 'bg-red-900/30 text-red-400 border border-red-800/40 hover:bg-red-900/50'
