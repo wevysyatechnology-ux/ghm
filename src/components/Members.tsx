@@ -639,6 +639,17 @@ function EditMemberModal({ member, onClose, onSuccess }: { member: Profile & { h
         .update(updateData)
         .eq('id', member.id);
       if (error) throw error;
+
+      const isActive = formData.membership_status === 'active';
+      const { error: upError } = await supabase
+        .from('users_profile')
+        .update({
+          membership_status: formData.membership_status,
+          is_suspended: !isActive,
+        })
+        .eq('id', member.id);
+      if (upError) console.warn('users_profile update warning:', upError.message);
+
       onSuccess();
     } catch (err: any) {
       setError(err.message || 'Failed to update member');
