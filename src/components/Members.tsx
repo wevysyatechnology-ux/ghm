@@ -1195,9 +1195,17 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
         const roleValue = row['Role'] || row['role'] || '';
         const normalizedRole = roleValue.trim() ? roleValue.toLowerCase() : 'member';
 
-        const rawStatus = row['Membership Status'] || row['membership_status'] || row['Membership_Status'] || 'active';
-        const validStatuses = ['active', 'resigned', 'expired', 'terminated'];
-        const normalizedStatus = validStatuses.includes(rawStatus.toLowerCase()) ? rawStatus.toLowerCase() : 'active';
+        const rawStatus = (row['Membership Status'] || row['membership_status'] || row['Membership_Status'] || 'active').toString().toLowerCase().trim();
+        const statusAliasMap: Record<string, string> = {
+          active: 'active',
+          resigned: 'resigned',
+          expired: 'expired',
+          terminated: 'terminated',
+          inactive: 'terminated',
+          suspended: 'terminated',
+          left: 'resigned',
+        };
+        const normalizedStatus = statusAliasMap[rawStatus] ?? 'active';
 
         const member: ImportMember = {
           full_name: row['Full Name'] || row['full_name'] || '',

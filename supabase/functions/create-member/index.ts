@@ -96,11 +96,24 @@ Deno.serve(async (req: Request) => {
     // Wait a moment for the trigger to create the profile
     await new Promise(resolve => setTimeout(resolve, 500));
 
+    const statusAliasMap: Record<string, string> = {
+      active: 'active',
+      resigned: 'resigned',
+      expired: 'expired',
+      terminated: 'terminated',
+      inactive: 'terminated',
+      suspended: 'terminated',
+      left: 'resigned',
+    };
+    const rawStatus = (body.membership_status || 'active').toLowerCase().trim();
+    const membershipStatus = statusAliasMap[rawStatus] ?? 'active';
+    const isSuspended = membershipStatus !== 'active';
+
     // Update the profile with additional details
     const updateData: any = {
       full_name: body.full_name,
       role: body.role || 'member',
-      membership_status: body.membership_status || 'active',
+      membership_status: membershipStatus,
       approval_status: 'approved',
       house_id: body.house_id || null,
       zone: body.zone || null,
@@ -119,9 +132,6 @@ Deno.serve(async (req: Request) => {
       console.error('Profile update error:', updateError);
       throw new Error(`Failed to update profile: ${updateError.message}`);
     }
-
-    const membershipStatus = body.membership_status || 'active';
-    const isSuspended = membershipStatus !== 'active';
 
     await supabase
       .from('users_profile')
