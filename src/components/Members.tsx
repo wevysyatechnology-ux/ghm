@@ -1079,6 +1079,7 @@ interface ImportMember {
   email: string;
   full_name: string;
   role: string;
+  membership_status: string;
   house_id?: string;
   zone?: string;
   business?: string;
@@ -1125,7 +1126,8 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
         'Zone': 'South Zone',
         'Business': 'Technology Solutions',
         'Industry': 'IT',
-        'Keywords': 'technology, consulting, cloud'
+        'Keywords': 'technology, consulting, cloud',
+        'Membership Status': 'active'
       },
       {
         'Full Name': 'Jane Smith',
@@ -1136,7 +1138,8 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
         'Zone': 'North Zone',
         'Business': 'Consulting Services',
         'Industry': 'Business',
-        'Keywords': 'consulting, management'
+        'Keywords': 'consulting, management',
+        'Membership Status': 'active'
       }
     ];
 
@@ -1150,7 +1153,8 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
       { wch: 15 },
       { wch: 25 },
       { wch: 15 },
-      { wch: 30 }
+      { wch: 30 },
+      { wch: 20 }
     ];
 
     const wb = XLSX.utils.book_new();
@@ -1191,11 +1195,16 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
         const roleValue = row['Role'] || row['role'] || '';
         const normalizedRole = roleValue.trim() ? roleValue.toLowerCase() : 'member';
 
+        const rawStatus = row['Membership Status'] || row['membership_status'] || row['Membership_Status'] || 'active';
+        const validStatuses = ['active', 'resigned', 'expired', 'terminated'];
+        const normalizedStatus = validStatuses.includes(rawStatus.toLowerCase()) ? rawStatus.toLowerCase() : 'active';
+
         const member: ImportMember = {
           full_name: row['Full Name'] || row['full_name'] || '',
           email: row['Email'] || row['email'] || '',
           mobile: row['Mobile'] || row['mobile'] || '',
           role: normalizedRole,
+          membership_status: normalizedStatus,
           house_id: house?.id,
           zone: row['Zone'] || row['zone'] || '',
           business: row['Business'] || row['business'] || '',
@@ -1270,7 +1279,7 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
               password: '147852369',
               full_name: memberData.full_name,
               role: 'member',
-              membership_status: 'active',
+              membership_status: memberData.membership_status || 'active',
               house_id: memberData.house_id || null,
               zone: memberData.zone || null,
               business: memberData.business || null,

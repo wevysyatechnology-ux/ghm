@@ -120,6 +120,17 @@ Deno.serve(async (req: Request) => {
       throw new Error(`Failed to update profile: ${updateError.message}`);
     }
 
+    const membershipStatus = body.membership_status || 'active';
+    const isSuspended = membershipStatus !== 'active';
+
+    await supabase
+      .from('users_profile')
+      .update({
+        membership_status: membershipStatus,
+        is_suspended: isSuspended,
+      })
+      .eq('id', authData.user.id);
+
     return new Response(
       JSON.stringify({
         success: true,
