@@ -75,27 +75,6 @@ Deno.serve(async (req: Request) => {
       throw new Error('Missing required fields: email, password, full_name');
     }
 
-    // Create the auth user with service role
-    const { data: authData, error: createError } = await supabase.auth.admin.createUser({
-      email: body.email,
-      password: body.password,
-      email_confirm: true,
-      user_metadata: {
-        full_name: body.full_name,
-      },
-    });
-
-    if (createError) {
-      throw new Error(`Failed to create auth user: ${createError.message}`);
-    }
-
-    if (!authData.user) {
-      throw new Error('Failed to create auth user');
-    }
-
-    // Wait a moment for the trigger to create the profile
-    await new Promise(resolve => setTimeout(resolve, 500));
-
     const statusAliasMap: Record<string, string> = {
       active: 'active',
       resigned: 'resigned',
@@ -109,8 +88,35 @@ Deno.serve(async (req: Request) => {
     const membershipStatus = statusAliasMap[rawStatus] ?? 'active';
     const isSuspended = membershipStatus !== 'active';
 
-    // Update the profile with additional details
-    const updateData: any = {
+    // Create the auth user with service role
+    const { data: authData, error: createError } = await supabase.auth.admin.createUser({
+      email: body.email,
+      password: body.password,
+      email_confirm: true,
+      user_metadata: {
+        full_name: body.full_name,
+        mobile: body.mobile || null,
+        business: body.business || null,
+        industry: body.industry || null,
+        house_id: body.house_id || null,
+      },
+    });
+
+    if (createError) {
+      throw new Error(`Failed to create auth user: ${createError.message}`);
+    }
+
+    if (!authData.user) {
+      throw new Error('Failed to create auth user');
+    }
+
+    // Wait for trigger to run, then upsert profile with all correct values
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    const upsertData: any = {
+      id: authData.user.id,
+      auth_user_id: authData.user.id,
+      email: body.email,
       full_name: body.full_name,
       role: body.role || 'member',
       membership_status: membershipStatus,
@@ -123,23 +129,27 @@ Deno.serve(async (req: Request) => {
       keywords: body.keywords || [],
     };
 
-    const { error: updateError } = await supabase
+    const { error: upsertError } = await supabase
       .from('profiles')
-      .update(updateData)
-      .eq('id', authData.user.id);
+      .upsert(upsertData, { onConflict: 'id' });
 
-    if (updateError) {
-      console.error('Profile update error:', updateError);
-      throw new Error(`Failed to update profile: ${updateError.message}`);
+    if (upsertError) {
+      console.error('Profile upsert error:', upsertError);
+      throw new Error(`Failed to update profile: ${upsertError.message}`);
     }
 
     await supabase
       .from('users_profile')
-      .update({
+      .upsert({
+        id: authData.user.id,
+        full_name: body.full_name,
+        phone_number: body.mobile || null,
+        business_category: body.business || null,
         membership_status: membershipStatus,
         is_suspended: isSuspended,
-      })
-      .eq('id', authData.user.id);
+        attendance_status: 'normal',
+        absence_count: 0,
+      }, { onConflict: 'id' });
 
     return new Response(
       JSON.stringify({
