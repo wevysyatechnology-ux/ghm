@@ -77,11 +77,11 @@ Deno.serve(async (req: Request) => {
 
     const statusAliasMap: Record<string, string> = {
       active: 'active',
+      inactive: 'inactive',
       resigned: 'resigned',
       expired: 'expired',
       terminated: 'terminated',
-      inactive: 'terminated',
-      suspended: 'terminated',
+      suspended: 'inactive',
       left: 'resigned',
     };
     const rawStatus = (body.membership_status || 'active').toLowerCase().trim();

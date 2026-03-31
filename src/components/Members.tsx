@@ -5,12 +5,14 @@ import { useAuth } from '../contexts/AuthContext';
 import { Profile, House } from '../types';
 import * as XLSX from 'xlsx';
 
-const MEMBERSHIP_STATUSES = ['active', 'resigned', 'expired', 'terminated'] as const;
+const MEMBERSHIP_STATUSES = ['active', 'inactive', 'resigned', 'expired', 'terminated'] as const;
 
 function membershipStatusStyle(status: string) {
   switch (status) {
     case 'active':
       return { backgroundColor: 'rgba(74, 222, 128, 0.15)', color: '#4ADE80' };
+    case 'inactive':
+      return { backgroundColor: 'rgba(251, 146, 60, 0.15)', color: '#FB923C' };
     case 'resigned':
       return { backgroundColor: 'rgba(251, 191, 36, 0.15)', color: '#FBBF24' };
     case 'expired':
@@ -305,7 +307,7 @@ function AddMemberModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
     email: '',
     full_name: '',
     role: 'member' as Profile['role'],
-    membership_status: 'active' as 'active' | 'resigned' | 'expired' | 'terminated',
+    membership_status: 'active' as 'active' | 'inactive' | 'resigned' | 'expired' | 'terminated',
     house_id: '',
     zone: '',
     business: '',
@@ -466,7 +468,7 @@ function AddMemberModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
                 className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white focus:outline-none input-glow"
               >
                 {MEMBERSHIP_STATUSES.map(s => (
-                  <option key={s} value={s} className="capitalize">{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                  <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
                 ))}
               </select>
             </div>
@@ -559,7 +561,7 @@ function EditMemberModal({ member, onClose, onSuccess }: { member: Profile & { h
     email: member.email,
     full_name: member.full_name,
     role: member.role,
-    membership_status: (member.membership_status || 'active') as 'active' | 'resigned' | 'expired' | 'terminated',
+    membership_status: (member.membership_status || 'active') as 'active' | 'inactive' | 'resigned' | 'expired' | 'terminated',
     house_id: member.house_id || '',
     zone: member.zone || '',
     business: member.business || '',
@@ -1198,11 +1200,11 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
         const rawStatus = (row['Membership Status'] || row['membership_status'] || row['Membership_Status'] || 'active').toString().toLowerCase().trim();
         const statusAliasMap: Record<string, string> = {
           active: 'active',
+          inactive: 'inactive',
           resigned: 'resigned',
           expired: 'expired',
           terminated: 'terminated',
-          inactive: 'terminated',
-          suspended: 'terminated',
+          suspended: 'inactive',
           left: 'resigned',
         };
         const normalizedStatus = statusAliasMap[rawStatus] ?? 'active';
