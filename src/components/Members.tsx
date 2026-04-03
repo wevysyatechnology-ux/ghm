@@ -24,12 +24,16 @@ function membershipStatusStyle(status: string) {
   }
 }
 
+const PAGE_SIZE = 9;
+
 export default function Members() {
   const { profile } = useAuth();
   const [members, setMembers] = useState<(Profile & { house?: House })[]>([]);
-  const [filteredMembers, setFilteredMembers] = useState<(Profile & { house?: House })[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [selectedMember, setSelectedMember] = useState<Profile & { house?: House } | null>(null);
@@ -37,50 +41,45 @@ export default function Members() {
   const [deletingMember, setDeletingMember] = useState<Profile & { house?: House } | null>(null);
 
   const canManageMembers = profile?.role === 'super_admin' || profile?.role === 'global_admin';
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   useEffect(() => {
-    fetchMembers();
-  }, []);
+    fetchMembers(searchQuery, currentPage);
+  }, [searchQuery, currentPage]);
 
   useEffect(() => {
-    filterMembers();
-  }, [searchQuery, members]);
+    const timer = setTimeout(() => {
+      setCurrentPage(1);
+      setSearchQuery(searchInput);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
-  const fetchMembers = async () => {
+  const fetchMembers = async (query: string, page: number) => {
+    setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select(`
-          *,
-          house:houses(*)
-        `)
-        .order('created_at', { ascending: false });
+      const from = (page - 1) * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
 
+      let q = supabase
+        .from('profiles')
+        .select('*, house:houses(*)', { count: 'exact' })
+        .order('full_name', { ascending: true })
+        .range(from, to);
+
+      if (query.trim()) {
+        q = q.or(`full_name.ilike.%${query.trim()}%,email.ilike.%${query.trim()}%`);
+      }
+
+      const { data, error, count } = await q;
       if (error) throw error;
       setMembers(data || []);
-      setFilteredMembers(data || []);
+      setTotalCount(count ?? 0);
     } catch (error) {
       console.error('Error fetching members:', error);
     } finally {
       setLoading(false);
     }
-  };
-
-  const filterMembers = () => {
-    if (!searchQuery) {
-      setFilteredMembers(members);
-      return;
-    }
-
-    const query = searchQuery.toLowerCase();
-    const filtered = members.filter(
-      (member) =>
-        member.full_name.toLowerCase().includes(query) ||
-        member.email.toLowerCase().includes(query) ||
-        member.business?.toLowerCase().includes(query) ||
-        member.industry?.toLowerCase().includes(query)
-    );
-    setFilteredMembers(filtered);
   };
 
   return (
@@ -120,23 +119,28 @@ export default function Members() {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#6B7280]" />
             <input
               type="text"
-              placeholder="Search members..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by name or email..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               className="w-full pl-12 pr-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow transition-all"
             />
           </div>
+          {totalCount > 0 && (
+            <span className="text-sm text-[#6B7280] whitespace-nowrap">
+              {totalCount} member{totalCount !== 1 ? 's' : ''}
+            </span>
+          )}
         </div>
 
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[...Array(6)].map((_, i) => (
+            {[...Array(PAGE_SIZE)].map((_, i) => (
               <div key={i} className="h-48 bg-[#0F1412] rounded-2xl animate-pulse" />
             ))}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredMembers.map((member, index) => (
+            {members.map((member, index) => (
               <div
                 key={member.id}
                 className="bg-[#0F1412] rounded-2xl p-6 border border-gray-800/50 hover:border-[#6EE7B7]/30 transition-all duration-300 group relative overflow-hidden animate-slide-up backdrop-blur-xl"
@@ -234,9 +238,73 @@ export default function Members() {
           </div>
         )}
 
-        {filteredMembers.length === 0 && !loading && (
+        {members.length === 0 && !loading && (
           <div className="text-center py-12 text-[#6B7280]">
-            No members found
+            {searchQuery ? `No members found matching "${searchQuery}"` : 'No members found'}
+          </div>
+        )}
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between mt-8 pt-6 border-t border-gray-800/50">
+            <span className="text-sm text-[#6B7280]">
+              Page {currentPage} of {totalPages}
+            </span>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 rounded-lg text-sm border border-gray-800 text-[#9CA3AF] hover:text-white hover:border-[#6EE7B7]/50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              >
+                «
+              </button>
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 rounded-lg text-sm border border-gray-800 text-[#9CA3AF] hover:text-white hover:border-[#6EE7B7]/50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              >
+                ‹ Prev
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                .reduce<(number | '...')[]>((acc, p, idx, arr) => {
+                  if (idx > 0 && typeof arr[idx - 1] === 'number' && (p as number) - (arr[idx - 1] as number) > 1) {
+                    acc.push('...');
+                  }
+                  acc.push(p);
+                  return acc;
+                }, [])
+                .map((p, i) =>
+                  p === '...' ? (
+                    <span key={`ellipsis-${i}`} className="px-2 text-[#6B7280]">…</span>
+                  ) : (
+                    <button
+                      key={p}
+                      onClick={() => setCurrentPage(p as number)}
+                      className="px-3 py-1.5 rounded-lg text-sm border transition-all"
+                      style={currentPage === p
+                        ? { backgroundColor: '#4ADE80', color: '#0B0F0E', borderColor: '#4ADE80' }
+                        : { borderColor: 'rgb(31,41,35)', color: '#9CA3AF' }
+                      }
+                    >
+                      {p}
+                    </button>
+                  )
+                )}
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1.5 rounded-lg text-sm border border-gray-800 text-[#9CA3AF] hover:text-white hover:border-[#6EE7B7]/50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              >
+                Next ›
+              </button>
+              <button
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1.5 rounded-lg text-sm border border-gray-800 text-[#9CA3AF] hover:text-white hover:border-[#6EE7B7]/50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              >
+                »
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -246,7 +314,7 @@ export default function Members() {
           onClose={() => setShowAddModal(false)}
           onSuccess={() => {
             setShowAddModal(false);
-            fetchMembers();
+            fetchMembers(searchQuery, currentPage);
           }}
         />
       )}
@@ -255,7 +323,8 @@ export default function Members() {
         <ImportMembersModal
           onClose={() => setShowImportModal(false)}
           onSuccess={() => {
-            fetchMembers();
+            fetchMembers(searchQuery, 1);
+            setCurrentPage(1);
           }}
         />
       )}
@@ -282,7 +351,7 @@ export default function Members() {
           onClose={() => setEditingMember(null)}
           onSuccess={() => {
             setEditingMember(null);
-            fetchMembers();
+            fetchMembers(searchQuery, currentPage);
           }}
         />
       )}
@@ -293,7 +362,7 @@ export default function Members() {
           onClose={() => setDeletingMember(null)}
           onSuccess={() => {
             setDeletingMember(null);
-            fetchMembers();
+            fetchMembers(searchQuery, currentPage);
           }}
         />
       )}
