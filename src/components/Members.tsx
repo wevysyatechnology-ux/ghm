@@ -61,18 +61,25 @@ export default function Members() {
       const from = (page - 1) * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
-      let q = supabase
+      const trimmed = query.trim();
+
+      let countQuery = supabase
         .from('profiles')
-        .select('*, house:houses(*)', { count: 'exact' })
+        .select('id', { count: 'exact', head: true });
+
+      let dataQuery = supabase
+        .from('profiles')
+        .select('*, house:houses(*)')
         .order('full_name', { ascending: true })
         .range(from, to);
 
-      if (query.trim()) {
-        const safe = query.trim().replace(/[%_]/g, '\\$&');
-        q = q.or(`full_name.ilike.%${safe}%,email.ilike.%${safe}%`, { referencedTable: 'profiles' });
+      if (trimmed) {
+        const safe = `%${trimmed}%`;
+        countQuery = countQuery.or(`full_name.ilike.${safe},email.ilike.${safe}`);
+        dataQuery = dataQuery.or(`full_name.ilike.${safe},email.ilike.${safe}`);
       }
 
-      const { data, error, count } = await q;
+      const [{ count }, { data, error }] = await Promise.all([countQuery, dataQuery]);
       if (error) throw error;
       setMembers(data || []);
       setTotalCount(count ?? 0);
