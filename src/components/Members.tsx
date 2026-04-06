@@ -68,7 +68,8 @@ export default function Members() {
         .range(from, to);
 
       if (query.trim()) {
-        q = q.or(`full_name.ilike.%${query.trim()}%,email.ilike.%${query.trim()}%`);
+        const safe = query.trim().replace(/[%_]/g, '\\$&');
+        q = q.or(`full_name.ilike.%${safe}%,email.ilike.%${safe}%`, { referencedTable: 'profiles' });
       }
 
       const { data, error, count } = await q;
