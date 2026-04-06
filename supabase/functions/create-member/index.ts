@@ -39,13 +39,11 @@ Deno.serve(async (req: Request) => {
       },
     });
 
-    // Get the authorization header
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       throw new Error('Missing authorization header');
     }
 
-    // Verify the caller is authenticated
     const token = authHeader.replace('Bearer ', '');
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
@@ -53,7 +51,6 @@ Deno.serve(async (req: Request) => {
       throw new Error('Unauthorized');
     }
 
-    // Verify the caller is an admin
     const { data: callerProfile, error: profileError } = await supabase
       .from('profiles')
       .select('role')
@@ -68,7 +65,6 @@ Deno.serve(async (req: Request) => {
       throw new Error('Only super admins and global admins can create members');
     }
 
-    // Parse request body
     const body: RequestBody = await req.json();
 
     if (!body.email || !body.password || !body.full_name) {
@@ -88,7 +84,9 @@ Deno.serve(async (req: Request) => {
     const membershipStatus = statusAliasMap[rawStatus] ?? 'active';
     const isSuspended = membershipStatus !== 'active';
 
-    // Create the auth user with service role
+    let userId: string;
+    let wasExisting = false;
+
     const { data: authData, error: createError } = await supabase.auth.admin.createUser({
       email: body.email,
       password: body.password,
@@ -103,19 +101,44 @@ Deno.serve(async (req: Request) => {
     });
 
     if (createError) {
-      throw new Error(`Failed to create auth user: ${createError.message}`);
+      const msg = createError.message.toLowerCase();
+      const alreadyRegistered =
+        msg.includes('already registered') ||
+        msg.includes('already exists') ||
+        msg.includes('duplicate') ||
+        msg.includes('unique');
+
+      if (!alreadyRegistered) {
+        throw new Error(`Failed to create auth user: ${createError.message}`);
+      }
+
+      // Auth user already exists — look them up by email
+      const { data: listData, error: listError } = await supabase.auth.admin.listUsers();
+      if (listError) {
+        throw new Error(`Failed to look up existing user: ${listError.message}`);
+      }
+
+      const existingUser = listData.users.find(
+        (u) => u.email?.toLowerCase() === body.email.toLowerCase()
+      );
+
+      if (!existingUser) {
+        throw new Error('User already registered but could not be found');
+      }
+
+      userId = existingUser.id;
+      wasExisting = true;
+    } else {
+      if (!authData.user) {
+        throw new Error('Failed to create auth user');
+      }
+      userId = authData.user.id;
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
-    if (!authData.user) {
-      throw new Error('Failed to create auth user');
-    }
-
-    // Wait for trigger to run, then upsert profile with all correct values
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    const upsertData: any = {
-      id: authData.user.id,
-      auth_user_id: authData.user.id,
+    const upsertData: Record<string, unknown> = {
+      id: userId,
+      auth_user_id: userId,
       email: body.email,
       full_name: body.full_name,
       role: body.role || 'member',
@@ -141,7 +164,7 @@ Deno.serve(async (req: Request) => {
     await supabase
       .from('users_profile')
       .upsert({
-        id: authData.user.id,
+        id: userId,
         full_name: body.full_name,
         phone_number: body.mobile || null,
         business_category: body.business || null,
@@ -154,7 +177,8 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         success: true,
-        user_id: authData.user.id,
+        user_id: userId,
+        was_existing: wasExisting,
       }),
       {
         headers: {
