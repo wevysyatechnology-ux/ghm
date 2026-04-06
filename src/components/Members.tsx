@@ -63,25 +63,33 @@ export default function Members() {
 
       const trimmed = query.trim();
 
-      let countQuery = supabase
+      let idsQuery = supabase
         .from('profiles')
-        .select('id', { count: 'exact', head: true });
-
-      let dataQuery = supabase
-        .from('profiles')
-        .select('*, house:houses(*)')
-        .order('full_name', { ascending: true })
-        .range(from, to);
+        .select('id', { count: 'exact' })
+        .order('full_name', { ascending: true });
 
       if (trimmed) {
         const safe = `%${trimmed}%`;
-        countQuery = countQuery.or(`full_name.ilike.${safe},email.ilike.${safe}`);
-        dataQuery = dataQuery.or(`full_name.ilike.${safe},email.ilike.${safe}`);
+        idsQuery = idsQuery.or(`full_name.ilike.${safe},email.ilike.${safe}`);
       }
 
-      const [{ count }, { data, error }] = await Promise.all([countQuery, dataQuery]);
-      if (error) throw error;
-      setMembers(data || []);
+      const { data: idsData, error: idsError, count } = await idsQuery;
+      if (idsError) throw idsError;
+
+      const pageIds = (idsData || []).slice(from, to + 1).map((r: { id: string }) => r.id);
+
+      let members: typeof idsData = [];
+      if (pageIds.length > 0) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*, house:houses(*)')
+          .in('id', pageIds)
+          .order('full_name', { ascending: true });
+        if (error) throw error;
+        members = data || [];
+      }
+
+      setMembers(members as never[]);
       setTotalCount(count ?? 0);
     } catch (error) {
       console.error('Error fetching members:', error);
