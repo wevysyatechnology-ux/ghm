@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Bug, Sparkles, ChevronUp, CheckCircle, ArrowLeft, ExternalLink } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Bug, Sparkles, ChevronUp, CheckCircle, ArrowLeft, ExternalLink, Upload, X, Image } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 type AppName = 'WeVysya AI' | 'WeVysya Social' | 'WeVysya Meeting Companion';
@@ -10,6 +10,9 @@ const APP_OPTIONS: { value: AppName; color: string; description: string }[] = [
   { value: 'WeVysya Meeting Companion', color: '#F97316', description: 'Meetings & collaboration' },
 ];
 
+const MAX_SCREENSHOTS = 5;
+const MAX_FILE_SIZE_MB = 5;
+
 interface FormState {
   app_name: AppName;
   type: 'bug' | 'feature';
@@ -17,6 +20,13 @@ interface FormState {
   description: string;
   submitter_name: string;
   submitter_email: string;
+}
+
+interface ScreenshotFile {
+  file: File;
+  preview: string;
+  uploading: boolean;
+  error: string;
 }
 
 const INITIAL_FORM: FormState = {
@@ -34,6 +44,39 @@ export default function FeedbackForm() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
+  const [screenshots, setScreenshots] = useState<ScreenshotFile[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    const remaining = MAX_SCREENSHOTS - screenshots.length;
+    const toAdd = files.slice(0, remaining);
+
+    const newScreenshots: ScreenshotFile[] = toAdd
+      .filter((f) => {
+        if (!f.type.startsWith('image/')) return false;
+        if (f.size > MAX_FILE_SIZE_MB * 1024 * 1024) return false;
+        return true;
+      })
+      .map((f) => ({
+        file: f,
+        preview: URL.createObjectURL(f),
+        uploading: false,
+        error: '',
+      }));
+
+    setScreenshots((prev) => [...prev, ...newScreenshots]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const removeScreenshot = (index: number) => {
+    setScreenshots((prev) => {
+      URL.revokeObjectURL(prev[index].preview);
+      return prev.filter((_, i) => i !== index);
+    });
+  };
 
   const handleNext = () => {
     if (!form.title.trim() || !form.description.trim()) {
@@ -44,6 +87,22 @@ export default function FeedbackForm() {
     setStep(2);
   };
 
+  const uploadScreenshots = async (): Promise<string[]> => {
+    const urls: string[] = [];
+    for (let i = 0; i < screenshots.length; i++) {
+      const { file } = screenshots[i];
+      const ext = file.name.split('.').pop() || 'png';
+      const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from('product-desk-screenshots')
+        .upload(path, file, { contentType: file.type, upsert: false });
+      if (uploadError) throw new Error(`Screenshot upload failed: ${uploadError.message}`);
+      const { data } = supabase.storage.from('product-desk-screenshots').getPublicUrl(path);
+      urls.push(data.publicUrl);
+    }
+    return urls;
+  };
+
   const handleSubmit = async () => {
     if (!form.submitter_name.trim()) {
       setError('Please enter your name.');
@@ -52,6 +111,7 @@ export default function FeedbackForm() {
     setSubmitting(true);
     setError('');
     try {
+      const screenshotUrls = await uploadScreenshots();
       const { error: dbError } = await supabase.from('product_requests').insert({
         app_name: form.app_name,
         type: form.type,
@@ -60,6 +120,7 @@ export default function FeedbackForm() {
         submitter_name: form.submitter_name.trim(),
         submitter_email: form.submitter_email.trim(),
         status: 'new',
+        screenshot_urls: screenshotUrls,
       });
       if (dbError) throw dbError;
       setSubmitted(true);
@@ -82,7 +143,13 @@ export default function FeedbackForm() {
             Your {form.type === 'bug' ? 'bug report' : 'feature request'} has been submitted. Our team will review it shortly.
           </p>
           <button
-            onClick={() => { setForm(INITIAL_FORM); setStep(1); setSubmitted(false); }}
+            onClick={() => {
+              screenshots.forEach((s) => URL.revokeObjectURL(s.preview));
+              setForm(INITIAL_FORM);
+              setStep(1);
+              setSubmitted(false);
+              setScreenshots([]);
+            }}
             className="px-6 py-2.5 bg-[#4ADE80] text-[#0B0F0E] font-semibold rounded-xl hover:brightness-110 transition-all text-sm"
           >
             Submit Another
@@ -95,15 +162,24 @@ export default function FeedbackForm() {
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#0B0F0E' }}>
       <div className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden">
-        <div className="absolute top-[-200px] right-[-200px] w-[600px] h-[600px] rounded-full opacity-20"
-          style={{ background: 'radial-gradient(circle, #6EE7B7 0%, transparent 70%)' }} />
-        <div className="absolute bottom-[-200px] left-[-200px] w-[500px] h-[500px] rounded-full opacity-15"
-          style={{ background: 'radial-gradient(circle, #60A5FA 0%, transparent 70%)' }} />
+        <div
+          className="absolute top-[-200px] right-[-200px] w-[600px] h-[600px] rounded-full opacity-20"
+          style={{ background: 'radial-gradient(circle, #6EE7B7 0%, transparent 70%)' }}
+        />
+        <div
+          className="absolute bottom-[-200px] left-[-200px] w-[500px] h-[500px] rounded-full opacity-15"
+          style={{ background: 'radial-gradient(circle, #60A5FA 0%, transparent 70%)' }}
+        />
       </div>
 
       <header className="relative z-10 flex items-center justify-between px-6 py-4 border-b border-gray-800/50">
         <div className="flex items-center gap-3">
-          <img src="/Media/wevysyalogo.png" alt="WeVysya" className="h-8 w-auto" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+          <img
+            src="/Media/wevysyalogo.png"
+            alt="WeVysya"
+            className="h-8 w-auto"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          />
           <div>
             <p className="text-sm font-bold text-white leading-none">WeVysya</p>
             <p className="text-[10px] text-gray-500 leading-none mt-0.5">Product Desk</p>
@@ -128,13 +204,15 @@ export default function FeedbackForm() {
           <div className="flex items-center justify-center gap-3 mb-8">
             {[1, 2].map((s) => (
               <div key={s} className="flex items-center gap-3">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
-                  step === s
-                    ? 'bg-[#6EE7B7] text-[#0B0F0E]'
-                    : s < step
-                    ? 'bg-[#14532D] text-[#6EE7B7]'
-                    : 'bg-gray-800 text-gray-500'
-                }`}>
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
+                    step === s
+                      ? 'bg-[#6EE7B7] text-[#0B0F0E]'
+                      : s < step
+                      ? 'bg-[#14532D] text-[#6EE7B7]'
+                      : 'bg-gray-800 text-gray-500'
+                  }`}
+                >
                   {s < step ? '✓' : s}
                 </div>
                 {s < 2 && <div className={`w-12 h-0.5 ${step > s ? 'bg-[#6EE7B7]' : 'bg-gray-700'}`} />}
@@ -163,10 +241,7 @@ export default function FeedbackForm() {
                             : {}
                         }
                       >
-                        <div
-                          className="w-2.5 h-2.5 rounded-full shrink-0"
-                          style={{ backgroundColor: app.color }}
-                        />
+                        <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: app.color }} />
                         <div>
                           <p className="text-sm font-medium text-white">{app.value}</p>
                           <p className="text-xs text-gray-500">{app.description}</p>
@@ -283,6 +358,72 @@ export default function FeedbackForm() {
                     type="email"
                     className="w-full bg-[#0F1412] border border-gray-700/50 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-[#6EE7B7]/50"
                   />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-medium text-gray-400">
+                      Screenshots{' '}
+                      <span className="text-gray-600">(optional — up to {MAX_SCREENSHOTS})</span>
+                    </label>
+                    <span className={`text-xs font-medium ${screenshots.length >= MAX_SCREENSHOTS ? 'text-red-400' : 'text-gray-500'}`}>
+                      {screenshots.length}/{MAX_SCREENSHOTS}
+                    </span>
+                  </div>
+
+                  {screenshots.length > 0 && (
+                    <div className="grid grid-cols-3 gap-2 mb-3">
+                      {screenshots.map((s, i) => (
+                        <div key={i} className="relative group aspect-video rounded-lg overflow-hidden bg-[#0F1412] border border-gray-700/40">
+                          <img
+                            src={s.preview}
+                            alt={`Screenshot ${i + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                          <button
+                            onClick={() => removeScreenshot(i)}
+                            className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/70 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/80"
+                          >
+                            <X className="w-3 h-3 text-white" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {screenshots.length < MAX_SCREENSHOTS && (
+                    <>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="hidden"
+                        onChange={handleFileSelect}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-full flex flex-col items-center gap-2 py-5 rounded-xl border border-dashed border-gray-700/60 bg-[#0F1412] hover:border-[#6EE7B7]/40 hover:bg-[#6EE7B7]/4 transition-all group"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-gray-800 flex items-center justify-center group-hover:bg-[#6EE7B7]/10 transition-colors">
+                          {screenshots.length === 0 ? (
+                            <Image className="w-4 h-4 text-gray-500 group-hover:text-[#6EE7B7] transition-colors" />
+                          ) : (
+                            <Upload className="w-4 h-4 text-gray-500 group-hover:text-[#6EE7B7] transition-colors" />
+                          )}
+                        </div>
+                        <div className="text-center">
+                          <p className="text-xs text-gray-400 group-hover:text-gray-300 transition-colors">
+                            {screenshots.length === 0
+                              ? 'Click to attach screenshots'
+                              : `Add more (${MAX_SCREENSHOTS - screenshots.length} remaining)`}
+                          </p>
+                          <p className="text-[10px] text-gray-600 mt-0.5">PNG, JPG, GIF, WebP — max {MAX_FILE_SIZE_MB}MB each</p>
+                        </div>
+                      </button>
+                    </>
+                  )}
                 </div>
 
                 <div className="flex items-start gap-2 bg-[#0F1412] rounded-xl p-3 border border-gray-700/30">
