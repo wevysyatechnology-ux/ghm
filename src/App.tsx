@@ -18,6 +18,8 @@ import Reports from './components/Reports';
 import PendingMembers from './components/PendingMembers';
 import LocationManagement from './components/LocationManagement';
 import Footer from './components/Footer';
+import ProductDesk from './components/ProductDesk';
+import FeedbackForm from './components/FeedbackForm';
 
 function ConnectionTest() {
   const [connectionStatus, setConnectionStatus] = useState<'testing' | 'success' | 'error'>('testing');
@@ -94,6 +96,7 @@ function AppContent() {
   const [connectionTested, setConnectionTested] = useState(false);
   const isSignupRoute = window.location.pathname === '/signup';
   const isAttendRoute = window.location.pathname === '/attend';
+  const isFeedbackRoute = window.location.pathname === '/feedback';
 
   console.log('AppContent state:', { user: !!user, profile: !!profile, loading });
 
@@ -131,6 +134,10 @@ function AppContent() {
 
   if (isAttendRoute) {
     return <AttendScan />;
+  }
+
+  if (isFeedbackRoute) {
+    return <FeedbackForm />;
   }
 
   if (isSignupRoute) {
@@ -209,6 +216,7 @@ function AppContent() {
           {currentView === 'events' && <Events />}
           {currentView === 'attendance' && <Attendance />}
           {currentView === 'reports' && <Reports />}
+          {currentView === 'product_desk' && <ProductDesk />}
         </div>
         <Footer />
       </main>
