@@ -96,7 +96,9 @@ function AppContent() {
   const [connectionTested, setConnectionTested] = useState(false);
   const isSignupRoute = window.location.pathname === '/signup';
   const isAttendRoute = window.location.pathname === '/attend';
-  const isFeedbackRoute = window.location.pathname === '/feedback';
+  const isFeedbackRoute =
+    window.location.pathname === '/feedback' ||
+    window.location.pathname === '/product-desk-form';
 
   console.log('AppContent state:', { user: !!user, profile: !!profile, loading });
 
