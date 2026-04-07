@@ -1356,12 +1356,12 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
 
       if (uniqueCandidates.length > 0) {
         const emailsToCheck = uniqueCandidates.map(m => m.email);
-        const { data: existingProfiles } = await supabase
-          .from('profiles')
-          .select('email')
-          .in('email', emailsToCheck);
 
-        const existingEmails = new Set((existingProfiles || []).map((p: { email: string }) => p.email.toLowerCase()));
+        const { data: authEmails } = await supabase.rpc('check_emails_in_auth', {
+          emails: emailsToCheck,
+        });
+
+        const existingEmails = new Set<string>((authEmails as string[] || []).map(e => e.toLowerCase()));
 
         dbDuplicates = uniqueCandidates.filter(m => existingEmails.has(m.email.toLowerCase()));
         finalValid = uniqueCandidates.filter(m => !existingEmails.has(m.email.toLowerCase()));

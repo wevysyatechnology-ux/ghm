@@ -112,15 +112,25 @@ Deno.serve(async (req: Request) => {
         throw new Error(`Failed to create auth user: ${createError.message}`);
       }
 
-      // Auth user already exists — look them up by email
-      const { data: listData, error: listError } = await supabase.auth.admin.listUsers();
-      if (listError) {
-        throw new Error(`Failed to look up existing user: ${listError.message}`);
-      }
+      // Auth user already exists — look them up by email using a paginated search
+      let existingUser: { id: string; email?: string } | undefined;
+      let page = 1;
+      const perPage = 1000;
 
-      const existingUser = listData.users.find(
-        (u) => u.email?.toLowerCase() === body.email.toLowerCase()
-      );
+      while (!existingUser) {
+        const { data: listData, error: listError } = await supabase.auth.admin.listUsers({
+          page,
+          perPage,
+        });
+        if (listError) {
+          throw new Error(`Failed to look up existing user: ${listError.message}`);
+        }
+        existingUser = listData.users.find(
+          (u) => u.email?.toLowerCase() === body.email.toLowerCase()
+        );
+        if (listData.users.length < perPage) break;
+        page++;
+      }
 
       if (!existingUser) {
         throw new Error('User already registered but could not be found');
