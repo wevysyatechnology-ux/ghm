@@ -1174,6 +1174,7 @@ interface ImportMember {
   mobile?: string;
   keywords?: string[];
   errors?: string[];
+  isDuplicate?: boolean;
 }
 
 interface ImportResultRow {
@@ -1186,10 +1187,12 @@ interface ImportResultRow {
 function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(false);
   const [error, setError] = useState('');
   const [parsedData, setParsedData] = useState<ImportMember[]>([]);
   const [validData, setValidData] = useState<ImportMember[]>([]);
   const [invalidData, setInvalidData] = useState<ImportMember[]>([]);
+  const [duplicateData, setDuplicateData] = useState<ImportMember[]>([]);
   const [importResults, setImportResults] = useState<ImportResultRow[]>([]);
   const [houses, setHouses] = useState<House[]>([]);
 
@@ -1260,11 +1263,16 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
       setFile(selectedFile);
       setError('');
       setImportResults([]);
+      setParsedData([]);
+      setValidData([]);
+      setInvalidData([]);
+      setDuplicateData([]);
       parseFile(selectedFile);
     }
   };
 
   const parseFile = async (file: File) => {
+    setChecking(true);
     try {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
@@ -1296,7 +1304,7 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
 
         const member: ImportMember = {
           full_name: row['Full Name'] || row['full_name'] || '',
-          email: row['Email'] || row['email'] || '',
+          email: (row['Email'] || row['email'] || '').toString().trim().toLowerCase(),
           mobile: row['Mobile'] || row['mobile'] || '',
           role: normalizedRole,
           membership_status: normalizedStatus,
@@ -1305,7 +1313,8 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
           business: row['Business'] || row['business'] || '',
           industry: row['Industry'] || row['industry'] || '',
           keywords: keywordsArray,
-          errors: []
+          errors: [],
+          isDuplicate: false,
         };
 
         if (!member.full_name.trim()) {
@@ -1324,14 +1333,53 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
         return member;
       });
 
-      const valid = members.filter(m => !m.errors || m.errors.length === 0);
+      const formatValid = members.filter(m => !m.errors || m.errors.length === 0);
       const invalid = members.filter(m => m.errors && m.errors.length > 0);
 
+      const seenInFile = new Map<string, number>();
+      formatValid.forEach((m, i) => {
+        const key = m.email.toLowerCase();
+        if (seenInFile.has(key)) {
+          m.isDuplicate = true;
+          const firstIdx = seenInFile.get(key)!;
+          formatValid[firstIdx].isDuplicate = true;
+        } else {
+          seenInFile.set(key, i);
+        }
+      });
+
+      const uniqueCandidates = formatValid.filter(m => !m.isDuplicate);
+      const intraFileDuplicates = formatValid.filter(m => m.isDuplicate);
+
+      let dbDuplicates: ImportMember[] = [];
+      let finalValid = uniqueCandidates;
+
+      if (uniqueCandidates.length > 0) {
+        const emailsToCheck = uniqueCandidates.map(m => m.email);
+        const { data: existingProfiles } = await supabase
+          .from('profiles')
+          .select('email')
+          .in('email', emailsToCheck);
+
+        const existingEmails = new Set((existingProfiles || []).map((p: { email: string }) => p.email.toLowerCase()));
+
+        dbDuplicates = uniqueCandidates.filter(m => existingEmails.has(m.email.toLowerCase()));
+        finalValid = uniqueCandidates.filter(m => !existingEmails.has(m.email.toLowerCase()));
+      }
+
+      const allDuplicates = [
+        ...intraFileDuplicates.map(m => ({ ...m, errors: ['Duplicate email within file'] })),
+        ...dbDuplicates.map(m => ({ ...m, errors: ['Email already exists in database'] })),
+      ];
+
       setParsedData(members);
-      setValidData(valid);
+      setValidData(finalValid);
       setInvalidData(invalid);
+      setDuplicateData(allDuplicates);
     } catch (err: any) {
       setError('Failed to parse Excel file: ' + err.message);
+    } finally {
+      setChecking(false);
     }
   };
 
@@ -1500,12 +1548,23 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
             </div>
           )}
 
-          {parsedData.length > 0 && (
+          {checking && (
+            <div className="flex items-center gap-3 p-4 rounded-xl bg-[#0F1412] border border-gray-800 text-[#9CA3AF] text-sm">
+              <div className="w-4 h-4 border-2 border-[#6EE7B7]/40 border-t-[#6EE7B7] rounded-full animate-spin shrink-0" />
+              Checking for duplicates against existing members...
+            </div>
+          )}
+
+          {!checking && parsedData.length > 0 && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-3">
                 <div className="p-4 rounded-xl bg-green-900/20 border border-green-800/50">
                   <p className="text-sm text-[#9CA3AF] mb-1">Valid Records</p>
                   <p className="text-2xl font-bold text-green-400">{validData.length}</p>
+                </div>
+                <div className="p-4 rounded-xl bg-yellow-900/20 border border-yellow-800/50">
+                  <p className="text-sm text-[#9CA3AF] mb-1">Duplicates</p>
+                  <p className="text-2xl font-bold text-yellow-400">{duplicateData.length}</p>
                 </div>
                 <div className="p-4 rounded-xl bg-red-900/20 border border-red-800/50">
                   <p className="text-sm text-[#9CA3AF] mb-1">Invalid Records</p>
@@ -1542,6 +1601,32 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
                         ... and {validData.length - 10} more records
                       </div>
                     )}
+                  </div>
+                </div>
+              )}
+
+              {duplicateData.length > 0 && (
+                <div>
+                  <h3 className="font-medium mb-2 text-yellow-400">Duplicate Records ({duplicateData.length}) — will be skipped</h3>
+                  <div className="max-h-40 overflow-y-auto rounded-xl border border-yellow-800/50 bg-yellow-900/10">
+                    <table className="w-full text-sm">
+                      <thead className="bg-yellow-900/20 sticky top-0">
+                        <tr>
+                          <th className="text-left py-2 px-3 text-[#9CA3AF]">Name</th>
+                          <th className="text-left py-2 px-3 text-[#9CA3AF]">Email</th>
+                          <th className="text-left py-2 px-3 text-[#9CA3AF]">Reason</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {duplicateData.map((member, index) => (
+                          <tr key={index} className="border-t border-yellow-800/30">
+                            <td className="py-2 px-3">{member.full_name || '(empty)'}</td>
+                            <td className="py-2 px-3 text-[#9CA3AF]">{member.email || '(empty)'}</td>
+                            <td className="py-2 px-3 text-yellow-400 text-xs">{member.errors?.join(', ')}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}
@@ -1651,11 +1736,11 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
             </button>
             <button
               onClick={handleImport}
-              disabled={loading || validData.length === 0}
+              disabled={loading || checking || validData.length === 0}
               className="flex-1 px-6 py-3 rounded-xl font-medium transition-all disabled:opacity-50 glow-green-sm hover:glow-green"
               style={{ backgroundColor: '#4ADE80', color: '#0B0F0E' }}
             >
-              {loading ? 'Importing...' : `Import ${validData.length} Members`}
+              {loading ? 'Importing...' : checking ? 'Checking...' : `Import ${validData.length} Members`}
             </button>
           </div>
         </div>
