@@ -13,12 +13,14 @@ export const APP_NAMES: AppName[] = [
   'WeVysya AI',
   'WeVysya Social',
   'WeVysya Meeting Companion',
+  'GHM',
 ];
 
 export const APP_COLORS: Record<AppName, string> = {
   'WeVysya AI': '#6EE7B7',
   'WeVysya Social': '#60A5FA',
   'WeVysya Meeting Companion': '#F97316',
+  'GHM': '#FBBF24',
 };
 
 export const STATUS_FLOW: RequestStatus[] = [

@@ -1,5 +1,5 @@
 export type RequestType = 'bug' | 'feature';
-export type AppName = 'WeVysya AI' | 'WeVysya Social' | 'WeVysya Meeting Companion';
+export type AppName = 'WeVysya AI' | 'WeVysya Social' | 'WeVysya Meeting Companion' | 'GHM';
 export type RequestStatus = 'new' | 'under_review' | 'planned' | 'in_progress' | 'completed' | 'rejected';
 
 export interface ProductRequest {

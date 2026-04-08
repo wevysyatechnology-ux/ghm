@@ -2,12 +2,13 @@ import { useState, useRef } from 'react';
 import { Bug, Sparkles, ChevronUp, CheckCircle, ArrowLeft, ExternalLink, Upload, X, Image } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
-type AppName = 'WeVysya AI' | 'WeVysya Social' | 'WeVysya Meeting Companion';
+type AppName = 'WeVysya AI' | 'WeVysya Social' | 'WeVysya Meeting Companion' | 'GHM';
 
 const APP_OPTIONS: { value: AppName; color: string; description: string }[] = [
   { value: 'WeVysya AI', color: '#6EE7B7', description: 'AI-powered features & assistant' },
   { value: 'WeVysya Social', color: '#60A5FA', description: 'Social networking & connections' },
   { value: 'WeVysya Meeting Companion', color: '#F97316', description: 'Meetings & collaboration' },
+  { value: 'GHM', color: '#FBBF24', description: 'Global House Management portal' },
 ];
 
 const MAX_SCREENSHOTS = 5;
