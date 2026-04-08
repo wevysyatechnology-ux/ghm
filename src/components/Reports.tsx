@@ -58,31 +58,36 @@ export default function Reports() {
       const { data: housesData } = await housesQuery;
       const houseIds = (housesData || []).map((h) => h.id);
 
-      const isFiltered = filters.house || filters.zone || filters.state;
+      const isFiltered = !!(filters.house || filters.zone || filters.state);
 
       const membersPromise = isFiltered && houseIds.length
-        ? supabase.from('members').select('id, house_id').in('house_id', houseIds)
-        : supabase.from('members').select('id, house_id');
+        ? supabase.from('profiles').select('id, house_id').in('house_id', houseIds)
+        : supabase.from('profiles').select('id, house_id');
 
       const linksPromise = isFiltered && houseIds.length
-        ? supabase.from('links').select('id, house_id').in('house_id', houseIds)
-        : supabase.from('links').select('id, house_id');
+        ? supabase.from('core_links').select('id, house_id').in('house_id', houseIds)
+        : supabase.from('core_links').select('id, house_id');
 
       const dealsPromise = isFiltered && houseIds.length
-        ? supabase.from('deals').select('id, house_id, amount').in('house_id', houseIds)
-        : supabase.from('deals').select('id, house_id, amount');
+        ? supabase.from('core_deals').select('id, house_id, amount').in('house_id', houseIds)
+        : supabase.from('core_deals').select('id, house_id, amount');
+
+      const i2wePromise = isFiltered && houseIds.length
+        ? supabase.from('core_i2we').select('id, house_id').in('house_id', houseIds)
+        : supabase.from('core_i2we').select('id, house_id');
 
       const [membersRes, linksRes, dealsRes, i2weRes, attendanceRes] = await Promise.all([
         membersPromise,
         linksPromise,
         dealsPromise,
-        supabase.from('i2we_events').select('id', { count: 'exact', head: true }),
-        supabase.from('attendance').select('id', { count: 'exact', head: true }),
+        i2wePromise,
+        supabase.from('event_attendance').select('id', { count: 'exact', head: true }),
       ]);
 
       const membersData = membersRes.data || [];
       const linksData = linksRes.data || [];
       const dealsData = dealsRes.data || [];
+      const i2weData = i2weRes.data || [];
       const dealAmount = dealsData.reduce((s, d) => s + Number(d.amount || 0), 0);
 
       const zoneMap: Record<string, number> = {};
@@ -107,7 +112,7 @@ export default function Reports() {
         totalLinks: linksData.length,
         totalDeals: dealsData.length,
         totalDealAmount: dealAmount,
-        totalI2WE: i2weRes.count || 0,
+        totalI2WE: i2weData.length,
         totalAttendance: attendanceRes.count || 0,
       });
       setZoneStats(Object.entries(zoneMap).map(([zone, count]) => ({ zone, count })));
@@ -160,7 +165,7 @@ export default function Reports() {
     ];
 
     const houseSheet = [
-      ['House', 'Zone', 'State', 'Country', 'Members', 'Links', 'Deals', 'Deal Amount ($)'],
+      ['House', 'Zone', 'State', 'Country', 'Members', 'Links', 'Deals', 'Deal Amount (INR)'],
       ...houseRows.map((r) => [r.name, r.zone, r.state, r.country, r.members, r.links, r.deals, r.dealAmount]),
     ];
 
@@ -301,7 +306,7 @@ export default function Reports() {
             <MetricCard label="Total Members" value={stats.totalMembers} color="#4ADE80" />
             <MetricCard label="Total Links" value={stats.totalLinks} color="#6EE7B7" />
             <MetricCard label="Total Deals" value={stats.totalDeals} color="#4ADE80" />
-            <MetricCard label="Total Deal Value" value={`$${stats.totalDealAmount.toLocaleString()}`} color="#6EE7B7" />
+            <MetricCard label="Total Deal Value" value={`₹${stats.totalDealAmount.toLocaleString('en-IN')}`} color="#6EE7B7" />
             <MetricCard label="I2WE Events" value={stats.totalI2WE} color="#4ADE80" />
             <MetricCard label="Attendance Records" value={stats.totalAttendance} color="#6EE7B7" />
           </div>
@@ -361,7 +366,7 @@ export default function Reports() {
                         <td className="py-3 pr-4 text-right text-white">{row.links}</td>
                         <td className="py-3 pr-4 text-right text-white">{row.deals}</td>
                         <td className="py-3 text-right font-medium text-[#6EE7B7]">
-                          {row.dealAmount > 0 ? `$${row.dealAmount.toLocaleString()}` : '—'}
+                          {row.dealAmount > 0 ? `₹${row.dealAmount.toLocaleString('en-IN')}` : '—'}
                         </td>
                       </tr>
                     ))}
@@ -374,7 +379,7 @@ export default function Reports() {
                         <td className="pt-3 pr-4 text-right font-bold text-white">{stats.totalLinks}</td>
                         <td className="pt-3 pr-4 text-right font-bold text-white">{stats.totalDeals}</td>
                         <td className="pt-3 text-right font-bold text-[#6EE7B7]">
-                          {stats.totalDealAmount > 0 ? `$${stats.totalDealAmount.toLocaleString()}` : '—'}
+                          {stats.totalDealAmount > 0 ? `₹${stats.totalDealAmount.toLocaleString('en-IN')}` : '—'}
                         </td>
                       </tr>
                     </tfoot>
