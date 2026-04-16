@@ -22,7 +22,7 @@ interface CoreDeal {
   house?: { name: string };
 }
 
-export default function Deals() {
+export default function Deals({ readOnly = false }: { readOnly?: boolean }) {
   const [deals, setDeals] = useState<CoreDeal[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -66,14 +66,16 @@ export default function Deals() {
           <h1 className="text-3xl font-bold mb-2">Deals</h1>
           <p className="text-[#9CA3AF]">Transaction ledger</p>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="flex items-center space-x-2 px-6 py-3 rounded-xl font-medium transition-all-smooth glow-green-sm hover:glow-green hover:scale-105 active:scale-95"
-          style={{ backgroundColor: '#4ADE80', color: '#0B0F0E' }}
-        >
-          <Plus className="w-5 h-5" />
-          <span>Add Deal</span>
-        </button>
+        {!readOnly && (
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center space-x-2 px-6 py-3 rounded-xl font-medium transition-all-smooth glow-green-sm hover:glow-green hover:scale-105 active:scale-95"
+            style={{ backgroundColor: '#4ADE80', color: '#0B0F0E' }}
+          >
+            <Plus className="w-5 h-5" />
+            <span>Add Deal</span>
+          </button>
+        )}
       </div>
 
       <div className="bg-card rounded-2xl p-6 border border-gray-800/50">

@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Search, Plus, Filter, Edit, Trash2, X, Upload, Download, AlertCircle } from 'lucide-react';
+import { Search, Plus, Filter, CreditCard as Edit, Trash2, X, Upload, Download, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { House, Country, State, Zone } from '../types';
 import * as XLSX from 'xlsx';
 
-export default function Houses() {
+export default function Houses({ readOnly = false }: { readOnly?: boolean }) {
   const { profile } = useAuth();
   const [houses, setHouses] = useState<House[]>([]);
   const [filteredHouses, setFilteredHouses] = useState<House[]>([]);
@@ -16,7 +16,7 @@ export default function Houses() {
   const [editingHouse, setEditingHouse] = useState<House | null>(null);
   const [deletingHouse, setDeletingHouse] = useState<House | null>(null);
 
-  const canManageHouses = profile?.role === 'super_admin' || profile?.role === 'global_admin';
+  const canManageHouses = !readOnly && (profile?.role === 'super_admin' || profile?.role === 'global_admin');
 
   useEffect(() => {
     fetchHouses();

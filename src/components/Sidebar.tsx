@@ -12,23 +12,21 @@ export default function Sidebar({ currentView, onViewChange }: SidebarProps) {
   const isSuperAdmin = profile?.role === 'super_admin' || profile?.role === 'global_admin';
   const isCollaborator = profile?.role === 'collaborator';
 
-  const menuItems = isCollaborator
-    ? [{ id: 'product_desk', label: 'Product Desk', icon: Inbox }]
-    : [
-        { id: 'dashboard', label: 'Dashboard', icon: Home },
-        ...(isSuperAdmin ? [{ id: 'locations', label: 'Location', icon: MapPinned }] : []),
-        { id: 'houses', label: 'Houses', icon: Building2 },
-        { id: 'members', label: 'Members', icon: Users },
-        ...(isSuperAdmin ? [{ id: 'pending', label: 'Pending Approvals', icon: UserCheck }] : []),
-        { id: 'users', label: 'Users', icon: UserCog },
-        { id: 'links', label: 'Links', icon: Link2 },
-        { id: 'deals', label: 'Deals', icon: DollarSign },
-        { id: 'i2we', label: 'I2WE', icon: TrendingUp },
-        { id: 'events', label: 'Events', icon: CalendarDays },
-        { id: 'attendance', label: 'Attendance', icon: ClipboardList },
-        { id: 'reports', label: 'Reports', icon: BarChart3 },
-        ...(isSuperAdmin ? [{ id: 'product_desk', label: 'Product Desk', icon: Inbox }] : []),
-      ];
+  const menuItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: Home },
+    ...(isSuperAdmin ? [{ id: 'locations', label: 'Location', icon: MapPinned }] : []),
+    { id: 'houses', label: 'Houses', icon: Building2 },
+    { id: 'members', label: 'Members', icon: Users },
+    ...(isSuperAdmin ? [{ id: 'pending', label: 'Pending Approvals', icon: UserCheck }] : []),
+    { id: 'users', label: 'Users', icon: UserCog },
+    { id: 'links', label: 'Links', icon: Link2 },
+    { id: 'deals', label: 'Deals', icon: DollarSign },
+    { id: 'i2we', label: 'I2WE', icon: TrendingUp },
+    { id: 'events', label: 'Events', icon: CalendarDays },
+    { id: 'attendance', label: 'Attendance', icon: ClipboardList },
+    { id: 'reports', label: 'Reports', icon: BarChart3 },
+    ...(isSuperAdmin || isCollaborator ? [{ id: 'product_desk', label: 'Product Desk', icon: Inbox }] : []),
+  ];
 
   return (
     <div className="w-64 h-screen bg-glass border-r border-gray-800/50 flex flex-col">

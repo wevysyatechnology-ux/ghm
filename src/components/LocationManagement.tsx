@@ -12,7 +12,7 @@ const tabs: { id: Tab; label: string; icon: React.ComponentType<{ className?: st
   { id: 'zones', label: 'Zones', icon: Layers },
 ];
 
-export default function LocationManagement() {
+export default function LocationManagement({ readOnly: _readOnly = false }: { readOnly?: boolean }) {
   const [activeTab, setActiveTab] = useState<Tab>('countries');
 
   return (

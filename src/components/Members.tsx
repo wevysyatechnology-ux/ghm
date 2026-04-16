@@ -26,7 +26,7 @@ function membershipStatusStyle(status: string) {
 
 const PAGE_SIZE = 9;
 
-export default function Members() {
+export default function Members({ readOnly = false }: { readOnly?: boolean }) {
   const { profile } = useAuth();
   const [members, setMembers] = useState<(Profile & { house?: House })[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,7 +40,7 @@ export default function Members() {
   const [editingMember, setEditingMember] = useState<Profile & { house?: House } | null>(null);
   const [deletingMember, setDeletingMember] = useState<Profile & { house?: House } | null>(null);
 
-  const canManageMembers = profile?.role === 'super_admin' || profile?.role === 'global_admin';
+  const canManageMembers = !readOnly && (profile?.role === 'super_admin' || profile?.role === 'global_admin');
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   useEffect(() => {

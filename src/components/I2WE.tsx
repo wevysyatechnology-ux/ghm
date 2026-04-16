@@ -51,7 +51,7 @@ async function sendPushNotification(options: {
   }
 }
 
-export default function I2WE() {
+export default function I2WE({ readOnly = false }: { readOnly?: boolean }) {
   const [events, setEvents] = useState<CoreI2WE[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -117,14 +117,16 @@ export default function I2WE() {
           <h1 className="text-3xl font-bold mb-2">I2WE Events</h1>
           <p className="text-[#9CA3AF]">Track transformation from "I" to "WE"</p>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="flex items-center space-x-2 px-6 py-3 rounded-xl font-medium transition-all-smooth hover:brightness-110"
-          style={{ backgroundColor: '#4ADE80', color: '#0B0F0E' }}
-        >
-          <Plus className="w-5 h-5" />
-          <span>Add Event</span>
-        </button>
+        {!readOnly && (
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center space-x-2 px-6 py-3 rounded-xl font-medium transition-all-smooth hover:brightness-110"
+            style={{ backgroundColor: '#4ADE80', color: '#0B0F0E' }}
+          >
+            <Plus className="w-5 h-5" />
+            <span>Add Event</span>
+          </button>
+        )}
       </div>
 
       <div className="bg-card rounded-2xl p-6 border border-gray-800/50 relative z-10 backdrop-blur-xl">

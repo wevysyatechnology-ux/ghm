@@ -31,7 +31,7 @@ interface HouseStats {
   absent: number;
 }
 
-export default function Attendance() {
+export default function Attendance({ readOnly: _readOnly = false }: { readOnly?: boolean }) {
   const { profile } = useAuth();
   const [events, setEvents] = useState<EventRow[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>('');

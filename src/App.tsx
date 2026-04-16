@@ -92,9 +92,8 @@ function ConnectionTest() {
 
 function AppContent() {
   const { user, profile, loading } = useAuth();
-  const [currentView, setCurrentView] = useState(
-    profile?.role === 'collaborator' ? 'product_desk' : 'dashboard'
-  );
+  const [currentView, setCurrentView] = useState('dashboard');
+  const readOnly = profile?.role === 'collaborator';
   const [connectionTested, setConnectionTested] = useState(false);
   const isSignupRoute = window.location.pathname === '/signup';
   const isAttendRoute = window.location.pathname === '/attend';
@@ -209,16 +208,16 @@ function AppContent() {
       <main className="flex-1 overflow-y-auto flex flex-col">
         <div className="flex-1">
           {currentView === 'dashboard' && <Dashboard />}
-          {currentView === 'locations' && <LocationManagement />}
-          {currentView === 'houses' && <Houses />}
-          {currentView === 'members' && <Members />}
-          {currentView === 'pending' && <PendingMembers />}
-          {currentView === 'users' && <Users />}
-          {currentView === 'links' && <Links />}
-          {currentView === 'deals' && <Deals />}
-          {currentView === 'i2we' && <I2WE />}
-          {currentView === 'events' && <Events />}
-          {currentView === 'attendance' && <Attendance />}
+          {currentView === 'locations' && <LocationManagement readOnly={readOnly} />}
+          {currentView === 'houses' && <Houses readOnly={readOnly} />}
+          {currentView === 'members' && <Members readOnly={readOnly} />}
+          {currentView === 'pending' && <PendingMembers readOnly={readOnly} />}
+          {currentView === 'users' && <Users readOnly={readOnly} />}
+          {currentView === 'links' && <Links readOnly={readOnly} />}
+          {currentView === 'deals' && <Deals readOnly={readOnly} />}
+          {currentView === 'i2we' && <I2WE readOnly={readOnly} />}
+          {currentView === 'events' && <Events readOnly={readOnly} />}
+          {currentView === 'attendance' && <Attendance readOnly={readOnly} />}
           {currentView === 'reports' && <Reports />}
           {currentView === 'product_desk' && <ProductDesk />}
         </div>

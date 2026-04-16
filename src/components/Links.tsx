@@ -21,7 +21,7 @@ interface CoreLink {
   house?: { name: string };
 }
 
-export default function Links() {
+export default function Links({ readOnly = false }: { readOnly?: boolean }) {
   const [links, setLinks] = useState<CoreLink[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -85,14 +85,16 @@ export default function Links() {
           <h1 className="text-3xl font-bold mb-2">Links</h1>
           <p className="text-[#9CA3AF]">Member connection ledger</p>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="flex items-center space-x-2 px-6 py-3 rounded-xl font-medium transition-all-smooth glow-green-sm hover:glow-green hover:scale-105 active:scale-95"
-          style={{ backgroundColor: '#4ADE80', color: '#0B0F0E' }}
-        >
-          <Plus className="w-5 h-5" />
-          <span>Add Link</span>
-        </button>
+        {!readOnly && (
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center space-x-2 px-6 py-3 rounded-xl font-medium transition-all-smooth glow-green-sm hover:glow-green hover:scale-105 active:scale-95"
+            style={{ backgroundColor: '#4ADE80', color: '#0B0F0E' }}
+          >
+            <Plus className="w-5 h-5" />
+            <span>Add Link</span>
+          </button>
+        )}
       </div>
 
       <div className="bg-card rounded-2xl p-6 border border-gray-800/50">

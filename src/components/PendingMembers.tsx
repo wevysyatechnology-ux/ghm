@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Profile } from '../types';
 import { User, CheckCircle, XCircle, Mail, Phone, Building, Tag, AlertCircle } from 'lucide-react';
 
-export default function PendingMembers() {
+export default function PendingMembers({ readOnly = false }: { readOnly?: boolean }) {
   const { profile } = useAuth();
   const [pendingMembers, setPendingMembers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -12,7 +12,7 @@ export default function PendingMembers() {
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const isSuperAdmin = profile?.role === 'super_admin' || profile?.role === 'global_admin';
+  const isSuperAdmin = !readOnly && (profile?.role === 'super_admin' || profile?.role === 'global_admin');
 
   useEffect(() => {
     if (isSuperAdmin) {

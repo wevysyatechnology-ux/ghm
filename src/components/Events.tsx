@@ -37,14 +37,14 @@ function QRCodeCanvas({ token, size = 200 }: { token: string; size?: number }) {
   return <canvas ref={canvasRef} style={{ display: 'block', borderRadius: 4 }} />;
 }
 
-export default function Events() {
+export default function Events({ readOnly = false }: { readOnly?: boolean }) {
   const { profile } = useAuth();
   const [events, setEvents] = useState<GHMEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<GHMEvent | null>(null);
 
-  const isAdmin = profile?.role && ['super_admin', 'global_admin', 'zone_admin', 'house_admin'].includes(profile.role);
+  const isAdmin = !readOnly && profile?.role && ['super_admin', 'global_admin', 'zone_admin', 'house_admin'].includes(profile.role);
 
   useEffect(() => { fetchEvents(); }, []);
 

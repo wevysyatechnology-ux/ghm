@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Plus, Edit2, Trash2, X, UserCog, Mail, Phone, Building2, MapPin } from 'lucide-react';
+import { Plus, CreditCard as Edit2, Trash2, X, UserCog, Mail, Phone, Building2, MapPin } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Profile, House, UserRole } from '../types';
 
-export default function Users() {
+export default function Users({ readOnly = false }: { readOnly?: boolean }) {
   const { profile } = useAuth();
   const [users, setUsers] = useState<Profile[]>([]);
   const [houses, setHouses] = useState<House[]>([]);
@@ -23,9 +23,9 @@ export default function Users() {
     password: '',
   });
 
-  const canAdd = profile?.role === 'super_admin' || profile?.role === 'house_admin';
-  const canEdit = profile?.role === 'super_admin';
-  const canDelete = profile?.role === 'super_admin';
+  const canAdd = !readOnly && (profile?.role === 'super_admin' || profile?.role === 'house_admin');
+  const canEdit = !readOnly && profile?.role === 'super_admin';
+  const canDelete = !readOnly && profile?.role === 'super_admin';
 
   useEffect(() => {
     fetchUsers();
