@@ -34,6 +34,8 @@ export default function RequestDetail({
 }: RequestDetailProps) {
   const { profile } = useAuth();
   const isAdmin = profile?.role === 'super_admin' || profile?.role === 'global_admin';
+  const isCollaborator = profile?.role === 'collaborator';
+  const canPostOfficial = isAdmin || isCollaborator;
 
   const [commentName, setCommentName] = useState('');
   const [commentMsg, setCommentMsg] = useState('');
@@ -214,13 +216,13 @@ export default function RequestDetail({
                 <MessageCircle className="w-4 h-4 text-gray-400" />
                 Discussion
               </h4>
-              {isAdmin && (
+              {canPostOfficial && (
                 <button
                   onClick={() => setShowOfficialInput(!showOfficialInput)}
                   className="flex items-center gap-1 text-xs text-[#6EE7B7] hover:underline"
                 >
                   <Shield className="w-3.5 h-3.5" />
-                  Add Official Response
+                  Add Official Discussion
                 </button>
               )}
             </div>
@@ -231,7 +233,7 @@ export default function RequestDetail({
                   value={officialMsg}
                   onChange={(e) => setOfficialMsg(e.target.value)}
                   rows={3}
-                  placeholder="Write official response..."
+                  placeholder="Write official discussion..."
                   className="w-full bg-[#0F1412] border border-[#6EE7B7]/30 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-[#6EE7B7]/60 resize-none"
                 />
                 <div className="flex gap-2 justify-end">

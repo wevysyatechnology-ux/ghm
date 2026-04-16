@@ -1,4 +1,4 @@
-export type UserRole = 'super_admin' | 'global_admin' | 'zone_admin' | 'house_admin' | 'member';
+export type UserRole = 'super_admin' | 'global_admin' | 'zone_admin' | 'house_admin' | 'member' | 'collaborator';
 
 export interface Country {
   id: string;

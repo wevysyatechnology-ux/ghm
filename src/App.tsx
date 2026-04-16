@@ -92,7 +92,9 @@ function ConnectionTest() {
 
 function AppContent() {
   const { user, profile, loading } = useAuth();
-  const [currentView, setCurrentView] = useState('dashboard');
+  const [currentView, setCurrentView] = useState(
+    profile?.role === 'collaborator' ? 'product_desk' : 'dashboard'
+  );
   const [connectionTested, setConnectionTested] = useState(false);
   const isSignupRoute = window.location.pathname === '/signup';
   const isAttendRoute = window.location.pathname === '/attend';

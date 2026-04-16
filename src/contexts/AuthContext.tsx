@@ -108,6 +108,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await supabase.auth.signOut();
         throw new Error('Access restricted: Members can only login through the mobile app. Contact your administrator to upgrade your access level.');
       }
+
+      if (profileData.role === 'collaborator') {
+        return;
+      }
     }
   };
 
