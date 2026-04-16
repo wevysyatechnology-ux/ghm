@@ -539,6 +539,7 @@ function AddMemberModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
                 disabled
               >
                 <option value="member">Member</option>
+                <option value="collaborator">Collaborator</option>
                 <option value="house_admin">House Admin</option>
                 <option value="zone_admin">Zone Admin</option>
                 <option value="global_admin">Global Admin</option>
@@ -798,6 +799,7 @@ function EditMemberModal({ member, onClose, onSuccess }: { member: Profile & { h
                 required
               >
                 <option value="member">Member</option>
+                <option value="collaborator">Collaborator</option>
                 <option value="house_admin">House Admin</option>
                 <option value="zone_admin">Zone Admin</option>
                 <option value="global_admin">Global Admin</option>
