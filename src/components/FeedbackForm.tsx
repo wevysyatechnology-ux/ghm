@@ -109,6 +109,10 @@ export default function FeedbackForm() {
       setError('Please enter your name.');
       return;
     }
+    if (!form.submitter_email.trim()) {
+      setError('Please enter your email address.');
+      return;
+    }
     setSubmitting(true);
     setError('');
     try {
@@ -350,13 +354,14 @@ export default function FeedbackForm() {
 
                 <div>
                   <label className="text-xs font-medium text-gray-400 mb-1 block">
-                    Email <span className="text-gray-600">(optional — for updates)</span>
+                    Email *
                   </label>
                   <input
                     value={form.submitter_email}
                     onChange={(e) => setForm({ ...form, submitter_email: e.target.value })}
                     placeholder="your@email.com"
                     type="email"
+                    required
                     className="w-full bg-[#0F1412] border border-gray-700/50 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-[#6EE7B7]/50"
                   />
                 </div>
