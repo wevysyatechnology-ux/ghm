@@ -27,7 +27,7 @@ export function useProductDesk() {
     try {
       let query = supabase
         .from('product_requests')
-        .select('id, title, description, type, app_name, submitter_name, status, votes_count, is_pinned, official_response, screenshot_url, created_at, updated_at')
+        .select('id, title, description, type, app_name, submitter_name, submitter_email, status, votes_count, is_pinned, official_response, screenshot_url, created_at, updated_at')
         .order('is_pinned', { ascending: false })
         .order('created_at', { ascending: false });
 
