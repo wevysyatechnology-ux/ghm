@@ -167,6 +167,9 @@ export default function RequestDetail({
             <h2 className="text-lg font-bold text-white leading-snug mb-1">{request.title}</h2>
             <p className="text-xs text-gray-500">
               Submitted by <span className="text-gray-400">{request.submitter_name || 'Anonymous'}</span>
+              {request.submitter_email && (
+                <> · <span className="text-gray-400">{request.submitter_email}</span></>
+              )}
               {' · '}
               {new Date(request.created_at).toLocaleDateString('en-IN', {
                 day: 'numeric', month: 'short', year: 'numeric',
