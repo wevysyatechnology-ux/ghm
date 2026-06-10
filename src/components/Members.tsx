@@ -681,31 +681,25 @@ function EditMemberModal({ member, onClose, onSuccess }: { member: Profile & { h
 
       // Update password if provided
       if (formData.newPassword) {
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!session) throw new Error('No active session');
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error('No active session');
 
-          const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/change-user-password`;
-          const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${session.access_token}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              userId: member.id,
-              newPassword: formData.newPassword,
-            }),
-          });
+        const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/change-user-password`;
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: member.id,
+            newPassword: formData.newPassword,
+          }),
+        });
 
-          const result = await response.json();
-          if (!response.ok) {
-            console.warn('Password update warning:', result.error || 'Failed to update password');
-            // Don't throw - allow the update to continue even if password change fails
-          }
-        } catch (passwordError) {
-          console.warn('Password change error (non-fatal):', passwordError);
-          // Continue without throwing - password change is not critical
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || 'Failed to update password');
         }
       }
 
