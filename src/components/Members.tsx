@@ -689,7 +689,10 @@ function EditMemberModal({ member, onClose, onSuccess }: { member: Profile & { h
           body: { userId: member.id, newPassword: formData.newPassword },
         });
 
-        if (pwError) throw new Error(pwError.message || 'Failed to update password');
+        if (pwError) {
+          const msg = (pwError as any)?.context?.error || pwData?.error || pwError.message || 'Failed to update password';
+          throw new Error(msg);
+        }
         if (pwData?.error) throw new Error(pwData.error);
       }
 
