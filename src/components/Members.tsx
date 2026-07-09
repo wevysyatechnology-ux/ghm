@@ -684,16 +684,23 @@ function EditMemberModal({ member, onClose, onSuccess }: { member: Profile & { h
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error('No active session');
 
-        const { data: pwData, error: pwError } = await supabase.functions.invoke('change-user-password', {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-          body: { userId: member.id, newPassword: formData.newPassword },
-        });
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/change-user-password`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+              'Content-Type': 'application/json',
+              'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            },
+            body: JSON.stringify({ userId: member.id, newPassword: formData.newPassword }),
+          }
+        );
 
-        if (pwError) {
-          const msg = (pwError as any)?.context?.error || pwData?.error || pwError.message || 'Failed to update password';
-          throw new Error(msg);
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || 'Failed to update password');
         }
-        if (pwData?.error) throw new Error(pwData.error);
       }
 
       const updateData: any = {
