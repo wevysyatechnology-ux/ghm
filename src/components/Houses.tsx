@@ -17,7 +17,6 @@ export default function Houses({ readOnly = false }: { readOnly?: boolean }) {
   const [deletingHouse, setDeletingHouse] = useState<House | null>(null);
 
   const canManageHouses = !readOnly && (profile?.role === 'super_admin' || profile?.role === 'global_admin');
-  const canAddHouses = canManageHouses || profile?.role === 'collaborator';
 
   useEffect(() => {
     fetchHouses();
@@ -71,7 +70,7 @@ export default function Houses({ readOnly = false }: { readOnly?: boolean }) {
           <h1 className="text-3xl font-bold mb-2">Houses</h1>
           <p className="text-[#9CA3AF]">Manage WeVysya houses across zones</p>
         </div>
-        {canAddHouses && (
+        {canManageHouses && (
           <div className="flex items-center space-x-3">
             <button
               onClick={() => setShowImportModal(true)}

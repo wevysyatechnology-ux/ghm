@@ -19,7 +19,6 @@ export default function Zones() {
   const [filterCountryId, setFilterCountryId] = useState('');
 
   const canManage = profile?.role === 'super_admin' || profile?.role === 'global_admin';
-  const canAdd = canManage || profile?.role === 'collaborator';
 
   useEffect(() => {
     fetchZones();
@@ -92,7 +91,7 @@ export default function Zones() {
             <p className="text-xs text-[#9CA3AF]">{zones.length} total</p>
           </div>
         </div>
-        {canAdd && (
+        {canManage && (
           <button
             onClick={() => setShowAddModal(true)}
             className="flex items-center space-x-2 px-4 py-2 rounded-xl font-medium text-sm transition-all hover:brightness-110"

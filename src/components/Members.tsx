@@ -41,7 +41,6 @@ export default function Members({ readOnly = false }: { readOnly?: boolean }) {
   const [deletingMember, setDeletingMember] = useState<Profile & { house?: House } | null>(null);
 
   const canManageMembers = !readOnly && (profile?.role === 'super_admin' || profile?.role === 'global_admin');
-  const canAddMembers = canManageMembers || profile?.role === 'collaborator';
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   useEffect(() => {
@@ -109,7 +108,7 @@ export default function Members({ readOnly = false }: { readOnly?: boolean }) {
           <h1 className="text-3xl font-bold mb-2">Members</h1>
           <p className="text-[#9CA3AF]">WeVysya member profiles and details</p>
         </div>
-        {canAddMembers && (
+        {canManageMembers && (
           <div className="flex items-center space-x-3">
             <button
               onClick={() => setShowImportModal(true)}

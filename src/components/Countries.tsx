@@ -15,7 +15,6 @@ export default function Countries() {
   const [deletingCountry, setDeletingCountry] = useState<Country | null>(null);
 
   const canManage = profile?.role === 'super_admin' || profile?.role === 'global_admin';
-  const canAdd = canManage || profile?.role === 'collaborator';
 
   useEffect(() => {
     fetchCountries();
@@ -58,7 +57,7 @@ export default function Countries() {
             <p className="text-xs text-[#9CA3AF]">{countries.length} total</p>
           </div>
         </div>
-        {canAdd && (
+        {canManage && (
           <button
             onClick={() => setShowAddModal(true)}
             className="flex items-center space-x-2 px-4 py-2 rounded-xl font-medium text-sm transition-all hover:brightness-110"
