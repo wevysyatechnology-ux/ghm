@@ -61,14 +61,19 @@ Deno.serve(async (req: Request) => {
       throw new Error('Unable to verify permissions');
     }
 
-    if (!['super_admin', 'global_admin'].includes(callerProfile.role)) {
-      throw new Error('Only super admins and global admins can create members');
+    if (!['super_admin', 'global_admin', 'collaborator'].includes(callerProfile.role)) {
+      throw new Error('Only super admins, global admins and collaborators can create members');
     }
 
     const body: RequestBody = await req.json();
 
     if (!body.email || !body.password || !body.full_name) {
       throw new Error('Missing required fields: email, password, full_name');
+    }
+
+    // Collaborators can only create plain members — prevent role escalation
+    if (callerProfile.role === 'collaborator') {
+      body.role = 'member';
     }
 
     const statusAliasMap: Record<string, string> = {
