@@ -111,15 +111,13 @@ export default function Members({ readOnly = false }: { readOnly?: boolean }) {
         </div>
         {canAddMember && (
           <div className="flex items-center space-x-3">
-            {canManageMembers && (
-              <button
-                onClick={() => setShowImportModal(true)}
-                className="flex items-center space-x-2 px-6 py-3 rounded-xl font-medium border border-gray-800 text-white hover:bg-[#0F1412] transition-all-smooth"
-              >
-                <Upload className="w-5 h-5" />
-                <span>Import</span>
-              </button>
-            )}
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="flex items-center space-x-2 px-6 py-3 rounded-xl font-medium border border-gray-800 text-white hover:bg-[#0F1412] transition-all-smooth"
+            >
+              <Upload className="w-5 h-5" />
+              <span>Import</span>
+            </button>
             <button
               onClick={() => setShowAddModal(true)}
               className="flex items-center space-x-2 px-6 py-3 rounded-xl font-medium transition-all-smooth hover:brightness-110"
