@@ -42,6 +42,7 @@ export default function Members({ readOnly = false }: { readOnly?: boolean }) {
 
   const canManageMembers = !readOnly && (profile?.role === 'super_admin' || profile?.role === 'global_admin');
   const canAddMember = canManageMembers || profile?.role === 'collaborator';
+  const canEditMember = canAddMember;
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   useEffect(() => {
@@ -184,7 +185,7 @@ export default function Members({ readOnly = false }: { readOnly?: boolean }) {
                         </span>
                       </div>
                     </div>
-                    {canManageMembers && (
+                    {canEditMember && (
                       <div className="flex items-center space-x-1">
                         <button
                           onClick={() => setEditingMember(member)}
@@ -193,7 +194,7 @@ export default function Members({ readOnly = false }: { readOnly?: boolean }) {
                         >
                           <Edit className="w-4 h-4" />
                         </button>
-                        {member.role !== 'super_admin' && (
+                        {canManageMembers && member.role !== 'super_admin' && (
                           <button
                             onClick={() => setDeletingMember(member)}
                             className="p-2 rounded-lg text-red-400 hover:bg-red-900/20 transition-all-smooth"
@@ -358,7 +359,8 @@ export default function Members({ readOnly = false }: { readOnly?: boolean }) {
             setDeletingMember(selectedMember);
             setSelectedMember(null);
           }}
-          canManage={canManageMembers}
+          canManage={canEditMember}
+          canDelete={canManageMembers}
         />
       )}
 
@@ -913,13 +915,15 @@ function MemberDetailModal({
   onClose,
   onEdit,
   onDelete,
-  canManage
+  canManage,
+  canDelete
 }: {
   member: Profile & { house?: House };
   onClose: () => void;
   onEdit: () => void;
   onDelete: () => void;
   canManage: boolean;
+  canDelete: boolean;
 }) {
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 animate-fade-in">
@@ -936,7 +940,7 @@ function MemberDetailModal({
                 >
                   <Edit className="w-5 h-5" />
                 </button>
-                {member.role !== 'super_admin' && (
+                {canDelete && member.role !== 'super_admin' && (
                   <button
                     onClick={onDelete}
                     className="p-2 rounded-lg text-red-400 hover:bg-red-900/20 transition-all"

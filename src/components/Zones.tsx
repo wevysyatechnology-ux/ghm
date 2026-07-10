@@ -20,6 +20,7 @@ export default function Zones() {
 
   const canManage = profile?.role === 'super_admin' || profile?.role === 'global_admin';
   const canAdd = canManage || profile?.role === 'collaborator';
+  const canEdit = canAdd;
 
   useEffect(() => {
     fetchZones();
@@ -153,7 +154,7 @@ export default function Zones() {
                 <th className="text-left py-3 px-4 text-[#9CA3AF] font-medium text-sm">State</th>
                 <th className="text-left py-3 px-4 text-[#9CA3AF] font-medium text-sm">Country</th>
                 <th className="text-left py-3 px-4 text-[#9CA3AF] font-medium text-sm">Created</th>
-                {canManage && (
+                {canEdit && (
                   <th className="text-right py-3 px-4 text-[#9CA3AF] font-medium text-sm">Actions</th>
                 )}
               </tr>
@@ -179,7 +180,7 @@ export default function Zones() {
                   <td className="py-3 px-4 text-[#9CA3AF] text-sm">
                     {new Date(zone.created_at).toLocaleDateString()}
                   </td>
-                  {canManage && (
+                  {canEdit && (
                     <td className="py-3 px-4">
                       <div className="flex items-center justify-end space-x-2">
                         <button
@@ -188,12 +189,14 @@ export default function Zones() {
                         >
                           <Edit className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => setDeletingZone(zone)}
-                          className="p-2 rounded-lg text-red-400 hover:bg-red-900/20 transition-all"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {canManage && (
+                          <button
+                            onClick={() => setDeletingZone(zone)}
+                            className="p-2 rounded-lg text-red-400 hover:bg-red-900/20 transition-all"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   )}
