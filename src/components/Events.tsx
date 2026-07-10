@@ -45,6 +45,7 @@ export default function Events({ readOnly = false }: { readOnly?: boolean }) {
   const [selectedEvent, setSelectedEvent] = useState<GHMEvent | null>(null);
 
   const isAdmin = !readOnly && profile?.role && ['super_admin', 'global_admin', 'zone_admin', 'house_admin'].includes(profile.role);
+  const canAddEvent = isAdmin || profile?.role === 'collaborator';
 
   useEffect(() => { fetchEvents(); }, []);
 
@@ -124,7 +125,7 @@ export default function Events({ readOnly = false }: { readOnly?: boolean }) {
           <h1 className="text-3xl font-bold mb-2">Events</h1>
           <p className="text-[#9CA3AF]">Broadcast events to targeted members</p>
         </div>
-        {isAdmin && (
+        {canAddEvent && (
           <button
             onClick={() => setShowAddModal(true)}
             className="flex items-center space-x-2 px-6 py-3 rounded-xl font-medium transition-all-smooth hover:brightness-110"

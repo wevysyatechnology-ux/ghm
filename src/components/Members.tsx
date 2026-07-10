@@ -41,6 +41,7 @@ export default function Members({ readOnly = false }: { readOnly?: boolean }) {
   const [deletingMember, setDeletingMember] = useState<Profile & { house?: House } | null>(null);
 
   const canManageMembers = !readOnly && (profile?.role === 'super_admin' || profile?.role === 'global_admin');
+  const canAddMember = canManageMembers || profile?.role === 'collaborator';
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   useEffect(() => {
@@ -108,15 +109,17 @@ export default function Members({ readOnly = false }: { readOnly?: boolean }) {
           <h1 className="text-3xl font-bold mb-2">Members</h1>
           <p className="text-[#9CA3AF]">WeVysya member profiles and details</p>
         </div>
-        {canManageMembers && (
+        {canAddMember && (
           <div className="flex items-center space-x-3">
-            <button
-              onClick={() => setShowImportModal(true)}
-              className="flex items-center space-x-2 px-6 py-3 rounded-xl font-medium border border-gray-800 text-white hover:bg-[#0F1412] transition-all-smooth"
-            >
-              <Upload className="w-5 h-5" />
-              <span>Import</span>
-            </button>
+            {canManageMembers && (
+              <button
+                onClick={() => setShowImportModal(true)}
+                className="flex items-center space-x-2 px-6 py-3 rounded-xl font-medium border border-gray-800 text-white hover:bg-[#0F1412] transition-all-smooth"
+              >
+                <Upload className="w-5 h-5" />
+                <span>Import</span>
+              </button>
+            )}
             <button
               onClick={() => setShowAddModal(true)}
               className="flex items-center space-x-2 px-6 py-3 rounded-xl font-medium transition-all-smooth hover:brightness-110"
