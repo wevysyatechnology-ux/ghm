@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Search, Plus, Edit, Trash2, X, Globe } from 'lucide-react';
+import { Search, Plus, CreditCard as Edit, Trash2, X, Globe } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Country } from '../types';
@@ -14,7 +14,7 @@ export default function Countries() {
   const [editingCountry, setEditingCountry] = useState<Country | null>(null);
   const [deletingCountry, setDeletingCountry] = useState<Country | null>(null);
 
-  const canManage = profile?.role === 'super_admin' || profile?.role === 'global_admin';
+  const canManage = profile?.role === 'super_admin' || profile?.role === 'global_admin' || profile?.role === 'collaborator';
 
   useEffect(() => {
     fetchCountries();

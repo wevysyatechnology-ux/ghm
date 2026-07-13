@@ -42,8 +42,8 @@ Deno.serve(async (req: Request) => {
       .eq("id", callerUser.id)
       .maybeSingle();
 
-    if (!callerProfile || !["super_admin", "global_admin"].includes(callerProfile.role)) {
-      return new Response(JSON.stringify({ error: "Forbidden: Only admins can delete members" }), {
+    if (!callerProfile || !["super_admin", "global_admin", "collaborator"].includes(callerProfile.role)) {
+      return new Response(JSON.stringify({ error: "Forbidden: Only admins and collaborators can delete members" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

@@ -45,7 +45,7 @@ Deno.serve(async (req: Request) => {
       .eq("id", user.id)
       .single();
 
-    if (!profile || (profile.role !== "super_admin" && profile.role !== "global_admin")) {
+    if (!profile || (profile.role !== "super_admin" && profile.role !== "global_admin" && profile.role !== "collaborator")) {
       throw new Error("Insufficient permissions");
     }
 

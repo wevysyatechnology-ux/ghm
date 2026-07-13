@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Search, Plus, Edit, Trash2, X, Layers } from 'lucide-react';
+import { Search, Plus, CreditCard as Edit, Trash2, X, Layers } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Country, State, Zone } from '../types';
@@ -18,7 +18,7 @@ export default function Zones() {
   const [filterStateId, setFilterStateId] = useState('');
   const [filterCountryId, setFilterCountryId] = useState('');
 
-  const canManage = profile?.role === 'super_admin' || profile?.role === 'global_admin';
+  const canManage = profile?.role === 'super_admin' || profile?.role === 'global_admin' || profile?.role === 'collaborator';
 
   useEffect(() => {
     fetchZones();

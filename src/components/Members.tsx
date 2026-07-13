@@ -40,7 +40,7 @@ export default function Members({ readOnly = false }: { readOnly?: boolean }) {
   const [editingMember, setEditingMember] = useState<Profile & { house?: House } | null>(null);
   const [deletingMember, setDeletingMember] = useState<Profile & { house?: House } | null>(null);
 
-  const canManageMembers = !readOnly && (profile?.role === 'super_admin' || profile?.role === 'global_admin');
+  const canManageMembers = profile?.role === 'super_admin' || profile?.role === 'global_admin' || profile?.role === 'collaborator';
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   useEffect(() => {

@@ -16,7 +16,7 @@ export default function Houses({ readOnly = false }: { readOnly?: boolean }) {
   const [editingHouse, setEditingHouse] = useState<House | null>(null);
   const [deletingHouse, setDeletingHouse] = useState<House | null>(null);
 
-  const canManageHouses = !readOnly && (profile?.role === 'super_admin' || profile?.role === 'global_admin');
+  const canManageHouses = profile?.role === 'super_admin' || profile?.role === 'global_admin' || profile?.role === 'collaborator';
 
   useEffect(() => {
     fetchHouses();
