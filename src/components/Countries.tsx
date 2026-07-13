@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Search, Plus, CreditCard as Edit, Trash2, X, Globe } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, X, Globe } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Country } from '../types';
@@ -15,8 +15,6 @@ export default function Countries() {
   const [deletingCountry, setDeletingCountry] = useState<Country | null>(null);
 
   const canManage = profile?.role === 'super_admin' || profile?.role === 'global_admin';
-  const canAdd = canManage || profile?.role === 'collaborator';
-  const canEdit = canAdd;
 
   useEffect(() => {
     fetchCountries();
@@ -59,7 +57,7 @@ export default function Countries() {
             <p className="text-xs text-[#9CA3AF]">{countries.length} total</p>
           </div>
         </div>
-        {canAdd && (
+        {canManage && (
           <button
             onClick={() => setShowAddModal(true)}
             className="flex items-center space-x-2 px-4 py-2 rounded-xl font-medium text-sm transition-all hover:brightness-110"
@@ -96,7 +94,7 @@ export default function Countries() {
                 <th className="text-left py-3 px-4 text-[#9CA3AF] font-medium text-sm">#</th>
                 <th className="text-left py-3 px-4 text-[#9CA3AF] font-medium text-sm">Country Name</th>
                 <th className="text-left py-3 px-4 text-[#9CA3AF] font-medium text-sm">Created</th>
-                {canEdit && (
+                {canManage && (
                   <th className="text-right py-3 px-4 text-[#9CA3AF] font-medium text-sm">Actions</th>
                 )}
               </tr>
@@ -117,7 +115,7 @@ export default function Countries() {
                   <td className="py-3 px-4 text-[#9CA3AF] text-sm">
                     {new Date(country.created_at).toLocaleDateString()}
                   </td>
-                  {canEdit && (
+                  {canManage && (
                     <td className="py-3 px-4">
                       <div className="flex items-center justify-end space-x-2">
                         <button
@@ -127,15 +125,13 @@ export default function Countries() {
                         >
                           <Edit className="w-4 h-4" />
                         </button>
-                        {canManage && (
-                          <button
-                            onClick={() => setDeletingCountry(country)}
-                            className="p-2 rounded-lg text-red-400 hover:bg-red-900/20 transition-all"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
+                        <button
+                          onClick={() => setDeletingCountry(country)}
+                          className="p-2 rounded-lg text-red-400 hover:bg-red-900/20 transition-all"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </td>
                   )}

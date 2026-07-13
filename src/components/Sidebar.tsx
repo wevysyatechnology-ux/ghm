@@ -14,7 +14,7 @@ export default function Sidebar({ currentView, onViewChange }: SidebarProps) {
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home },
-    ...(isSuperAdmin || isCollaborator ? [{ id: 'locations', label: 'Location', icon: MapPinned }] : []),
+    ...(isSuperAdmin ? [{ id: 'locations', label: 'Location', icon: MapPinned }] : []),
     { id: 'houses', label: 'Houses', icon: Building2 },
     { id: 'members', label: 'Members', icon: Users },
     ...(isSuperAdmin ? [{ id: 'pending', label: 'Pending Approvals', icon: UserCheck }] : []),

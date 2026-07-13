@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Search, Plus, CreditCard as Edit, Trash2, X, MapPin } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, X, MapPin } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Country, State } from '../types';
@@ -17,8 +17,6 @@ export default function States() {
   const [filterCountryId, setFilterCountryId] = useState('');
 
   const canManage = profile?.role === 'super_admin' || profile?.role === 'global_admin';
-  const canAdd = canManage || profile?.role === 'collaborator';
-  const canEdit = canAdd;
 
   useEffect(() => {
     fetchStates();
@@ -74,7 +72,7 @@ export default function States() {
             <p className="text-xs text-[#9CA3AF]">{states.length} total</p>
           </div>
         </div>
-        {canAdd && (
+        {canManage && (
           <button
             onClick={() => setShowAddModal(true)}
             className="flex items-center space-x-2 px-4 py-2 rounded-xl font-medium text-sm transition-all hover:brightness-110"
@@ -126,7 +124,7 @@ export default function States() {
                 <th className="text-left py-3 px-4 text-[#9CA3AF] font-medium text-sm">State Name</th>
                 <th className="text-left py-3 px-4 text-[#9CA3AF] font-medium text-sm">Country</th>
                 <th className="text-left py-3 px-4 text-[#9CA3AF] font-medium text-sm">Created</th>
-                {canEdit && (
+                {canManage && (
                   <th className="text-right py-3 px-4 text-[#9CA3AF] font-medium text-sm">Actions</th>
                 )}
               </tr>
@@ -152,7 +150,7 @@ export default function States() {
                   <td className="py-3 px-4 text-[#9CA3AF] text-sm">
                     {new Date(state.created_at).toLocaleDateString()}
                   </td>
-                  {canEdit && (
+                  {canManage && (
                     <td className="py-3 px-4">
                       <div className="flex items-center justify-end space-x-2">
                         <button
@@ -161,14 +159,12 @@ export default function States() {
                         >
                           <Edit className="w-4 h-4" />
                         </button>
-                        {canManage && (
-                          <button
-                            onClick={() => setDeletingState(state)}
-                            className="p-2 rounded-lg text-red-400 hover:bg-red-900/20 transition-all"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
+                        <button
+                          onClick={() => setDeletingState(state)}
+                          className="p-2 rounded-lg text-red-400 hover:bg-red-900/20 transition-all"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </td>
                   )}
