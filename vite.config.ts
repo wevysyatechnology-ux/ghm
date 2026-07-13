@@ -42,6 +42,7 @@ function copyMediaFilesPlugin() {
 
 export default defineConfig({
   plugins: [react(), copyMediaFilesPlugin()],
+  envDir: '.',
   optimizeDeps: {
     exclude: ['lucide-react'],
     include: ['xlsx'],
