@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { BarChart3, Download, Filter, X, ChevronDown, FileSpreadsheet } from 'lucide-react';
+import { BarChart3, Download, Filter, X, ChevronDown, FileSpreadsheet, Calendar } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import * as XLSX from 'xlsx';
 
@@ -27,7 +27,7 @@ interface HouseRow {
   dealAmount: number;
 }
 
-interface Filters { house: string; zone: string; state: string; }
+interface Filters { house: string; zone: string; state: string; dateFrom: string; dateTo: string; }
 
 export default function Reports() {
   const [stats, setStats] = useState<Stats>({
@@ -38,7 +38,7 @@ export default function Reports() {
   const [zoneStats, setZoneStats] = useState<ZoneStat[]>([]);
   const [houseRows, setHouseRows] = useState<HouseRow[]>([]);
   const [allHouses, setAllHouses] = useState<HouseOption[]>([]);
-  const [filters, setFilters] = useState<Filters>({ house: '', zone: '', state: '' });
+  const [filters, setFilters] = useState<Filters>({ house: '', zone: '', state: '', dateFrom: '', dateTo: '' });
   const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
@@ -54,34 +54,59 @@ export default function Reports() {
       if (filters.house) housesQuery = housesQuery.eq('id', filters.house);
       else if (filters.zone) housesQuery = housesQuery.eq('zone', filters.zone);
       else if (filters.state) housesQuery = housesQuery.eq('state', filters.state);
+      if (filters.dateFrom) housesQuery = housesQuery.gte('created_at', filters.dateFrom);
+      if (filters.dateTo) housesQuery = housesQuery.lte('created_at', `${filters.dateTo}T23:59:59`);
 
       const { data: housesData } = await housesQuery;
       const houseIds = (housesData || []).map((h) => h.id);
 
       const isFiltered = !!(filters.house || filters.zone || filters.state);
+      const hasDate = !!(filters.dateFrom || filters.dateTo);
 
-      const membersPromise = isFiltered && houseIds.length
+      let membersPromise = isFiltered && houseIds.length
         ? supabase.from('profiles').select('id, house_id').in('house_id', houseIds)
         : supabase.from('profiles').select('id, house_id');
+      if (hasDate) {
+        membersPromise = membersPromise.gte('created_at', filters.dateFrom || '1900-01-01');
+        if (filters.dateTo) membersPromise = membersPromise.lte('created_at', `${filters.dateTo}T23:59:59`);
+      }
 
-      const linksPromise = isFiltered && houseIds.length
+      let linksPromise = isFiltered && houseIds.length
         ? supabase.from('core_links').select('id, house_id').in('house_id', houseIds)
         : supabase.from('core_links').select('id, house_id');
+      if (hasDate) {
+        linksPromise = linksPromise.gte('created_at', filters.dateFrom || '1900-01-01');
+        if (filters.dateTo) linksPromise = linksPromise.lte('created_at', `${filters.dateTo}T23:59:59`);
+      }
 
-      const dealsPromise = isFiltered && houseIds.length
+      let dealsPromise = isFiltered && houseIds.length
         ? supabase.from('core_deals').select('id, house_id, amount').in('house_id', houseIds)
         : supabase.from('core_deals').select('id, house_id, amount');
+      if (hasDate) {
+        dealsPromise = dealsPromise.gte('created_at', filters.dateFrom || '1900-01-01');
+        if (filters.dateTo) dealsPromise = dealsPromise.lte('created_at', `${filters.dateTo}T23:59:59`);
+      }
 
-      const i2wePromise = isFiltered && houseIds.length
+      let i2wePromise = isFiltered && houseIds.length
         ? supabase.from('core_i2we').select('id, house_id').in('house_id', houseIds)
         : supabase.from('core_i2we').select('id, house_id');
+      if (hasDate) {
+        i2wePromise = i2wePromise.gte('created_at', filters.dateFrom || '1900-01-01');
+        if (filters.dateTo) i2wePromise = i2wePromise.lte('created_at', `${filters.dateTo}T23:59:59`);
+      }
+
+      let attendancePromise = supabase.from('event_attendance').select('id', { count: 'exact', head: true });
+      if (hasDate) {
+        attendancePromise = attendancePromise.gte('created_at', filters.dateFrom || '1900-01-01');
+        if (filters.dateTo) attendancePromise = attendancePromise.lte('created_at', `${filters.dateTo}T23:59:59`);
+      }
 
       const [membersRes, linksRes, dealsRes, i2weRes, attendanceRes] = await Promise.all([
         membersPromise,
         linksPromise,
         dealsPromise,
         i2wePromise,
-        supabase.from('event_attendance').select('id', { count: 'exact', head: true }),
+        attendancePromise,
       ]);
 
       const membersData = membersRes.data || [];
@@ -127,7 +152,7 @@ export default function Reports() {
   useEffect(() => { fetchReports(); }, [fetchReports]);
 
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
-  const clearFilters = () => setFilters({ house: '', zone: '', state: '' });
+  const clearFilters = () => setFilters({ house: '', zone: '', state: '', dateFrom: '', dateTo: '' });
 
   const uniqueStates = [...new Set(allHouses.map((h) => h.state).filter(Boolean))].sort();
   const zonesForState = [...new Set(
@@ -145,6 +170,7 @@ export default function Reports() {
     if (filters.state) filterLabels.push(`State: ${filters.state}`);
     if (filters.zone) filterLabels.push(`Zone: ${filters.zone}`);
     if (filters.house) filterLabels.push(`House: ${allHouses.find((h) => h.id === filters.house)?.name || ''}`);
+    if (filters.dateFrom || filters.dateTo) filterLabels.push(`Date: ${filters.dateFrom || 'Start'} to ${filters.dateTo || 'Now'}`);
 
     const summary = [
       [`GHM Reports — ${date}`, filterLabels.join(' | ') || 'All Data'],
@@ -254,7 +280,7 @@ export default function Reports() {
             <FilterSelect
               label="State"
               value={filters.state}
-              onChange={(v) => setFilters({ house: '', zone: '', state: v })}
+              onChange={(v) => setFilters({ house: '', zone: '', state: v, dateFrom: filters.dateFrom, dateTo: filters.dateTo })}
               placeholder="All States"
               options={uniqueStates.map((s) => ({ value: s, label: s }))}
             />
@@ -273,13 +299,41 @@ export default function Reports() {
               options={housesForFilter.map((h) => ({ value: h.id, label: h.name }))}
             />
           </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+            <div>
+              <label className="text-xs font-medium text-[#9CA3AF] mb-1.5 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5" />
+                From Date
+              </label>
+              <input
+                type="date"
+                value={filters.dateFrom}
+                max={filters.dateTo || undefined}
+                onChange={(e) => setFilters((f) => ({ ...f, dateFrom: e.target.value }))}
+                className="w-full appearance-none bg-[#0D1410] border border-gray-700/50 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#6EE7B7]/50"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-[#9CA3AF] mb-1.5 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5" />
+                To Date
+              </label>
+              <input
+                type="date"
+                value={filters.dateTo}
+                min={filters.dateFrom || undefined}
+                onChange={(e) => setFilters((f) => ({ ...f, dateTo: e.target.value }))}
+                className="w-full appearance-none bg-[#0D1410] border border-gray-700/50 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#6EE7B7]/50"
+              />
+            </div>
+          </div>
         </div>
       )}
 
       {activeFilterCount > 0 && (
         <div className="relative z-10 flex flex-wrap gap-2">
           {filters.state && (
-            <FilterTag label={`State: ${filters.state}`} onRemove={() => setFilters({ house: '', zone: '', state: '' })} />
+            <FilterTag label={`State: ${filters.state}`} onRemove={() => setFilters((f) => ({ ...f, state: '' }))} />
           )}
           {filters.zone && (
             <FilterTag label={`Zone: ${filters.zone}`} onRemove={() => setFilters((f) => ({ ...f, house: '', zone: '' }))} />
@@ -288,6 +342,12 @@ export default function Reports() {
             <FilterTag
               label={`House: ${allHouses.find((h) => h.id === filters.house)?.name}`}
               onRemove={() => setFilters((f) => ({ ...f, house: '' }))}
+            />
+          )}
+          {(filters.dateFrom || filters.dateTo) && (
+            <FilterTag
+              label={`Date: ${filters.dateFrom || 'Start'} → ${filters.dateTo || 'Now'}`}
+              onRemove={() => setFilters((f) => ({ ...f, dateFrom: '', dateTo: '' }))}
             />
           )}
         </div>
