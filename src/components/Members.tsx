@@ -28,7 +28,7 @@ function membershipStatusStyle(status: string) {
 
 const PAGE_SIZE = 9;
 
-export default function Members({ readOnly = false }: { readOnly?: boolean }) {
+export default function Members({ readOnly: _readOnly = false }: { readOnly?: boolean }) {
   const { profile } = useAuth();
   const [members, setMembers] = useState<(Profile & { house?: House })[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1624,6 +1624,7 @@ interface ImportResultRow {
 
 function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [file, setFile] = useState<File | null>(null);
+  void file;
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState('');

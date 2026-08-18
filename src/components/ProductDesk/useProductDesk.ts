@@ -27,7 +27,7 @@ export function useProductDesk() {
     try {
       let query = supabase
         .from('product_requests')
-        .select('id, title, description, type, app_name, submitter_name, submitter_email, status, votes_count, is_pinned, official_response, screenshot_url, created_at, updated_at')
+        .select('id, title, description, type, app_name, submitter_name, submitter_email, user_id, status, votes_count, is_pinned, official_response, screenshot_url, created_at, updated_at')
         .order('is_pinned', { ascending: false })
         .order('created_at', { ascending: false });
 
@@ -71,9 +71,10 @@ export function useProductDesk() {
       setRequests(
         (data || []).map((r) => ({
           ...r,
+          user_id: r.user_id ?? null,
           user_voted: votedSet.has(r.id),
           comments_count: commentCounts[r.id] || 0,
-        }))
+        } as ProductRequest))
       );
     } catch (err) {
       console.error('Error fetching requests:', err);

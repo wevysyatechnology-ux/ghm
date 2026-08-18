@@ -58,7 +58,7 @@ export default function Attendance({ readOnly: _readOnly = false }: { readOnly?:
         .select('id, title, event_date, event_time, event_level, is_live, house:house_id(name)')
         .order('event_date', { ascending: false });
       if (error) throw error;
-      const evs = data || [];
+      const evs = (data || []) as unknown as EventRow[];
       setEvents(evs);
       if (evs.length > 0) setSelectedEventId(evs[0].id);
     } catch (err) {

@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { House, Country, State, Zone } from '../types';
 import * as XLSX from 'xlsx';
 
-export default function Houses({ readOnly = false }: { readOnly?: boolean }) {
+export default function Houses({ readOnly: _readOnly = false }: { readOnly?: boolean }) {
   const { profile } = useAuth();
   const [houses, setHouses] = useState<House[]>([]);
   const [filteredHouses, setFilteredHouses] = useState<House[]>([]);
@@ -747,6 +747,7 @@ interface ImportHouse {
 
 function ImportHousesModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [file, setFile] = useState<File | null>(null);
+  void file;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [parsedData, setParsedData] = useState<ImportHouse[]>([]);

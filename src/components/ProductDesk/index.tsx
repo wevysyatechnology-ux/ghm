@@ -31,7 +31,6 @@ export default function ProductDesk() {
   const [showSubmitModal, setShowSubmitModal] = useState(false);
 
   const bugs = requests.filter((r) => r.type === 'bug').length;
-  const features = requests.filter((r) => r.type === 'feature').length;
   const totalVotes = requests.reduce((s, r) => s + r.votes_count, 0);
 
   return (

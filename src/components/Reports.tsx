@@ -154,6 +154,26 @@ export default function Reports() {
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
   const clearFilters = () => setFilters({ house: '', zone: '', state: '', dateFrom: '', dateTo: '' });
 
+  const openDatePicker = (event: React.MouseEvent<HTMLInputElement>) => {
+    const input = event.currentTarget as HTMLInputElement & { showPicker?: () => void };
+    input.showPicker?.();
+  };
+
+  const handleFromDateChange = (dateFrom: string) => {
+    setFilters((f) => ({
+      ...f,
+      dateFrom,
+      dateTo: f.dateTo && f.dateTo < dateFrom ? dateFrom : f.dateTo,
+    }));
+  };
+
+  const handleToDateChange = (dateTo: string) => {
+    setFilters((f) => {
+      if (f.dateFrom && dateTo < f.dateFrom) return f;
+      return { ...f, dateTo };
+    });
+  };
+
   const uniqueStates = [...new Set(allHouses.map((h) => h.state).filter(Boolean))].sort();
   const zonesForState = [...new Set(
     allHouses.filter((h) => !filters.state || h.state === filters.state).map((h) => h.zone).filter(Boolean)
@@ -309,8 +329,9 @@ export default function Reports() {
                 type="date"
                 value={filters.dateFrom}
                 max={filters.dateTo || undefined}
-                onChange={(e) => setFilters((f) => ({ ...f, dateFrom: e.target.value }))}
-                className="w-full appearance-none bg-[#0D1410] border border-gray-700/50 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#6EE7B7]/50"
+                onClick={openDatePicker}
+                onChange={(e) => handleFromDateChange(e.target.value)}
+                className="w-full appearance-none cursor-pointer bg-[#0D1410] border border-gray-700/50 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#6EE7B7]/50"
               />
             </div>
             <div>
@@ -322,8 +343,9 @@ export default function Reports() {
                 type="date"
                 value={filters.dateTo}
                 min={filters.dateFrom || undefined}
-                onChange={(e) => setFilters((f) => ({ ...f, dateTo: e.target.value }))}
-                className="w-full appearance-none bg-[#0D1410] border border-gray-700/50 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#6EE7B7]/50"
+                onClick={openDatePicker}
+                onChange={(e) => handleToDateChange(e.target.value)}
+                className="w-full appearance-none cursor-pointer bg-[#0D1410] border border-gray-700/50 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#6EE7B7]/50"
               />
             </div>
           </div>

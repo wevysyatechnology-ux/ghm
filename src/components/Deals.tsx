@@ -156,8 +156,8 @@ export default function Deals({ readOnly = false }: { readOnly?: boolean }) {
 
 function AddDealModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const { user } = useAuth();
-  const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [houses, setHouses] = useState<House[]>([]);
+  const [profiles, setProfiles] = useState<Pick<Profile, 'id' | 'full_name'>[]>([]);
+  const [houses, setHouses] = useState<Pick<House, 'id' | 'name'>[]>([]);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
