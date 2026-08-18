@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { BarChart3, Download, Filter, X, ChevronDown, FileSpreadsheet, Calendar } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import * as XLSX from 'xlsx';
@@ -153,11 +153,6 @@ export default function Reports() {
 
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
   const clearFilters = () => setFilters({ house: '', zone: '', state: '', dateFrom: '', dateTo: '' });
-
-  const openDatePicker = (event: React.MouseEvent<HTMLInputElement>) => {
-    const input = event.currentTarget as HTMLInputElement & { showPicker?: () => void };
-    input.showPicker?.();
-  };
 
   const handleFromDateChange = (dateFrom: string) => {
     setFilters((f) => ({
@@ -320,34 +315,18 @@ export default function Reports() {
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-            <div>
-              <label className="text-xs font-medium text-[#9CA3AF] mb-1.5 flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5" />
-                From Date
-              </label>
-              <input
-                type="date"
-                value={filters.dateFrom}
-                max={filters.dateTo || undefined}
-                onClick={openDatePicker}
-                onChange={(e) => handleFromDateChange(e.target.value)}
-                className="w-full appearance-none cursor-pointer bg-[#0D1410] border border-gray-700/50 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#6EE7B7]/50"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-[#9CA3AF] mb-1.5 flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5" />
-                To Date
-              </label>
-              <input
-                type="date"
-                value={filters.dateTo}
-                min={filters.dateFrom || undefined}
-                onClick={openDatePicker}
-                onChange={(e) => handleToDateChange(e.target.value)}
-                className="w-full appearance-none cursor-pointer bg-[#0D1410] border border-gray-700/50 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#6EE7B7]/50"
-              />
-            </div>
+            <DateInput
+              label="From Date"
+              value={filters.dateFrom}
+              max={filters.dateTo || undefined}
+              onChange={handleFromDateChange}
+            />
+            <DateInput
+              label="To Date"
+              value={filters.dateTo}
+              min={filters.dateFrom || undefined}
+              onChange={handleToDateChange}
+            />
           </div>
         </div>
       )}
@@ -510,6 +489,51 @@ function FilterSelect({
           ))}
         </select>
         <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 pointer-events-none" />
+      </div>
+    </div>
+  );
+}
+
+function DateInput({
+  label, value, min, max, onChange,
+}: {
+  label: string;
+  value: string;
+  min?: string;
+  max?: string;
+  onChange: (v: string) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const openPicker = () => {
+    const input = inputRef.current as (HTMLInputElement & { showPicker?: () => void }) | null;
+    input?.showPicker?.();
+  };
+
+  return (
+    <div>
+      <label className="text-xs font-medium text-[#9CA3AF] mb-1.5 flex items-center gap-1.5">
+        <Calendar className="w-3.5 h-3.5" />
+        {label}
+      </label>
+      <div className="relative">
+        <input
+          ref={inputRef}
+          type="date"
+          value={value}
+          min={min}
+          max={max}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full appearance-none cursor-pointer bg-[#0D1410] border border-gray-700/50 rounded-xl pl-3 pr-10 py-2.5 text-sm text-white focus:outline-none focus:border-[#6EE7B7]/50"
+        />
+        <button
+          type="button"
+          onClick={openPicker}
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#6EE7B7] hover:text-[#4ADE80] transition-colors"
+          tabIndex={-1}
+        >
+          <Calendar className="w-4 h-4" />
+        </button>
       </div>
     </div>
   );
