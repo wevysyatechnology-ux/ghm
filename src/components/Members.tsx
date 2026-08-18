@@ -192,7 +192,8 @@ export default function Members({ readOnly = false }: { readOnly?: boolean }) {
       let idsQuery = supabase
         .from('profiles')
         .select('id', { count: 'exact' })
-        .order('full_name', { ascending: true });
+        .order('full_name', { ascending: true })
+        .range(from, to);
 
       if (trimmed) {
         const safe = `%${trimmed}%`;
@@ -214,19 +215,15 @@ export default function Members({ readOnly = false }: { readOnly?: boolean }) {
       const { data: idsData, error: idsError, count } = await idsQuery;
       if (idsError) throw idsError;
 
-      const pageIds = (idsData || []).slice(from, to + 1).map((r: { id: string }) => r.id);
+      const pageIds = (idsData || []).map((r: { id: string }) => r.id);
 
       let members: typeof idsData = [];
       if (pageIds.length > 0) {
-        let detailQuery = supabase
+        const { data, error } = await supabase
           .from('profiles')
           .select('*, house:houses(*)')
           .in('id', pageIds)
           .order('full_name', { ascending: true });
-        if (filteredHouseIds) {
-          detailQuery = detailQuery.in('house_id', filteredHouseIds);
-        }
-        const { data, error } = await detailQuery;
         if (error) throw error;
         members = data || [];
       }
