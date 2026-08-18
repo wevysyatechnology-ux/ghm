@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
-import { Search, User, Plus, Upload, X, Download, AlertCircle, CreditCard as Edit, Trash2, Mail, Phone, Building, Tag } from 'lucide-react';
+import { useEffect, useState, useMemo } from 'react';
+import { Search, User, Plus, Upload, X, Download, AlertCircle, CreditCard as Edit, Trash2, Mail, Phone, Building, Tag, Filter, FileText, FileSpreadsheet, ChevronDown, Globe, MapPin, Layers, Home } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { Profile, House } from '../types';
+import { Profile, House, Country, State, Zone } from '../types';
 import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const MEMBERSHIP_STATUSES = ['active', 'inactive', 'resigned', 'expired', 'terminated'] as const;
 
@@ -40,12 +42,108 @@ export default function Members({ readOnly = false }: { readOnly?: boolean }) {
   const [editingMember, setEditingMember] = useState<Profile & { house?: House } | null>(null);
   const [deletingMember, setDeletingMember] = useState<Profile & { house?: House } | null>(null);
 
+  // Filter state
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [countryFilter, setCountryFilter] = useState('');
+  const [stateFilter, setStateFilter] = useState('');
+  const [zoneFilter, setZoneFilter] = useState('');
+  const [houseFilter, setHouseFilter] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+
+  // Location data
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [allStates, setAllStates] = useState<State[]>([]);
+  const [allZones, setAllZones] = useState<Zone[]>([]);
+  const [allHouses, setAllHouses] = useState<House[]>([]);
+  const [exporting, setExporting] = useState(false);
+
   const canManageMembers = profile?.role === 'super_admin' || profile?.role === 'global_admin' || profile?.role === 'collaborator';
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
+  // Cascading filter options
+  const statesForCountry = useMemo(
+    () => (countryFilter ? allStates.filter((s) => s.country_id === countryFilter) : allStates),
+    [countryFilter, allStates]
+  );
+  const zonesForState = useMemo(
+    () => (stateFilter ? allZones.filter((z) => z.state_id === stateFilter) : allZones),
+    [stateFilter, allZones]
+  );
+  const housesForZone = useMemo(() => {
+    let result = allHouses;
+    if (countryFilter) {
+      const countryName = countries.find((c) => c.id === countryFilter)?.name;
+      result = result.filter((h) => h.country === countryName);
+    }
+    if (stateFilter) {
+      const stateName = allStates.find((s) => s.id === stateFilter)?.name;
+      result = result.filter((h) => h.state === stateName);
+    }
+    if (zoneFilter) {
+      const zoneName = allZones.find((z) => z.id === zoneFilter)?.name;
+      result = result.filter((h) => h.zone === zoneName);
+    }
+    return result;
+  }, [countryFilter, stateFilter, zoneFilter, allHouses, allStates, allZones, countries]);
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (statusFilter !== 'all') count++;
+    if (countryFilter) count++;
+    if (stateFilter) count++;
+    if (zoneFilter) count++;
+    if (houseFilter) count++;
+    return count;
+  }, [statusFilter, countryFilter, stateFilter, zoneFilter, houseFilter]);
+
+  useEffect(() => {
+    fetchLocationData();
+  }, []);
+
+  const fetchLocationData = async () => {
+    const [{ data: c }, { data: s }, { data: z }, { data: h }] = await Promise.all([
+      supabase.from('countries').select('*').order('name'),
+      supabase.from('states').select('*, country:countries(id, name, created_at)').order('name'),
+      supabase.from('zones').select('*, state:states(id, name, country_id, created_at)').order('name'),
+      supabase.from('houses').select('*').order('name'),
+    ]);
+    setCountries(c || []);
+    setAllStates(s || []);
+    setAllZones(z || []);
+    setAllHouses(h || []);
+  };
+
+  const handleCountryChange = (cId: string) => {
+    setCountryFilter(cId);
+    setStateFilter('');
+    setZoneFilter('');
+    setHouseFilter('');
+  };
+  const handleStateChange = (sId: string) => {
+    setStateFilter(sId);
+    setZoneFilter('');
+    setHouseFilter('');
+  };
+  const handleZoneChange = (zId: string) => {
+    setZoneFilter(zId);
+    setHouseFilter('');
+  };
+
+  const clearAllFilters = () => {
+    setStatusFilter('all');
+    setCountryFilter('');
+    setStateFilter('');
+    setZoneFilter('');
+    setHouseFilter('');
+  };
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, countryFilter, stateFilter, zoneFilter, houseFilter]);
+
   useEffect(() => {
     fetchMembers(searchQuery, currentPage);
-  }, [searchQuery, currentPage]);
+  }, [searchQuery, currentPage, statusFilter, countryFilter, stateFilter, zoneFilter, houseFilter]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -63,6 +161,34 @@ export default function Members({ readOnly = false }: { readOnly?: boolean }) {
 
       const trimmed = query.trim();
 
+      // Determine house filter set from location filters
+      let filteredHouseIds: string[] | null = null;
+      const hasLocationFilter = countryFilter || stateFilter || zoneFilter || houseFilter;
+      if (hasLocationFilter) {
+        let candidateHouses = allHouses;
+        if (countryFilter) {
+          const countryName = countries.find((c) => c.id === countryFilter)?.name;
+          candidateHouses = candidateHouses.filter((h) => h.country === countryName);
+        }
+        if (stateFilter) {
+          const stateName = allStates.find((s) => s.id === stateFilter)?.name;
+          candidateHouses = candidateHouses.filter((h) => h.state === stateName);
+        }
+        if (zoneFilter) {
+          const zoneName = allZones.find((z) => z.id === zoneFilter)?.name;
+          candidateHouses = candidateHouses.filter((h) => h.zone === zoneName);
+        }
+        if (houseFilter) {
+          candidateHouses = candidateHouses.filter((h) => h.id === houseFilter);
+        }
+        filteredHouseIds = candidateHouses.map((h) => h.id);
+        if (filteredHouseIds.length === 0) {
+          setMembers([]);
+          setTotalCount(0);
+          return;
+        }
+      }
+
       let idsQuery = supabase
         .from('profiles')
         .select('id', { count: 'exact' })
@@ -73,6 +199,18 @@ export default function Members({ readOnly = false }: { readOnly?: boolean }) {
         idsQuery = idsQuery.or(`full_name.ilike.${safe},email.ilike.${safe}`);
       }
 
+      if (statusFilter !== 'all') {
+        if (statusFilter === 'active') {
+          idsQuery = idsQuery.eq('membership_status', 'active');
+        } else {
+          idsQuery = idsQuery.or(`membership_status.eq.inactive,membership_status.is.null`);
+        }
+      }
+
+      if (filteredHouseIds) {
+        idsQuery = idsQuery.in('house_id', filteredHouseIds);
+      }
+
       const { data: idsData, error: idsError, count } = await idsQuery;
       if (idsError) throw idsError;
 
@@ -80,11 +218,15 @@ export default function Members({ readOnly = false }: { readOnly?: boolean }) {
 
       let members: typeof idsData = [];
       if (pageIds.length > 0) {
-        const { data, error } = await supabase
+        let detailQuery = supabase
           .from('profiles')
           .select('*, house:houses(*)')
           .in('id', pageIds)
           .order('full_name', { ascending: true });
+        if (filteredHouseIds) {
+          detailQuery = detailQuery.in('house_id', filteredHouseIds);
+        }
+        const { data, error } = await detailQuery;
         if (error) throw error;
         members = data || [];
       }
@@ -95,6 +237,163 @@ export default function Members({ readOnly = false }: { readOnly?: boolean }) {
       console.error('Error fetching members:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const buildExportData = async () => {
+    const trimmed = searchQuery.trim();
+
+    let filteredHouseIds: string[] | null = null;
+    const hasLocationFilter = countryFilter || stateFilter || zoneFilter || houseFilter;
+    if (hasLocationFilter) {
+      let candidateHouses = allHouses;
+      if (countryFilter) {
+        const countryName = countries.find((c) => c.id === countryFilter)?.name;
+        candidateHouses = candidateHouses.filter((h) => h.country === countryName);
+      }
+      if (stateFilter) {
+        const stateName = allStates.find((s) => s.id === stateFilter)?.name;
+        candidateHouses = candidateHouses.filter((h) => h.state === stateName);
+      }
+      if (zoneFilter) {
+        const zoneName = allZones.find((z) => z.id === zoneFilter)?.name;
+        candidateHouses = candidateHouses.filter((h) => h.zone === zoneName);
+      }
+      if (houseFilter) {
+        candidateHouses = candidateHouses.filter((h) => h.id === houseFilter);
+      }
+      filteredHouseIds = candidateHouses.map((h) => h.id);
+      if (filteredHouseIds.length === 0) return [];
+    }
+
+    let query = supabase
+      .from('profiles')
+      .select('*, house:houses(*)')
+      .order('full_name', { ascending: true });
+
+    if (trimmed) {
+      const safe = `%${trimmed}%`;
+      query = query.or(`full_name.ilike.${safe},email.ilike.${safe}`);
+    }
+
+    if (statusFilter !== 'all') {
+      if (statusFilter === 'active') {
+        query = query.eq('membership_status', 'active');
+      } else {
+        query = query.or(`membership_status.eq.inactive,membership_status.is.null`);
+      }
+    }
+
+    if (filteredHouseIds) {
+      query = query.in('house_id', filteredHouseIds);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    return (data || []).map((m: Profile & { house?: House }) => ({
+      'Full Name': m.full_name || '',
+      'Email': m.email || '',
+      'Mobile': m.mobile || '',
+      'Role': m.role.replace('_', ' '),
+      'Membership Status': m.membership_status || 'active',
+      'Business': m.business || '',
+      'Industry': m.industry || '',
+      'Zone': m.zone || m.house?.zone || '',
+      'House': m.house?.name || '',
+      'House State': m.house?.state || '',
+      'House Country': m.house?.country || '',
+      'Member Since': m.created_at ? new Date(m.created_at).toLocaleDateString() : '',
+    }));
+  };
+
+  const exportExcel = async () => {
+    setExporting(true);
+    try {
+      const rows = await buildExportData();
+      if (rows.length === 0) { alert('No members to export with current filters'); return; }
+      const ws = XLSX.utils.json_to_sheet(rows);
+      ws['!cols'] = Object.keys(rows[0]).map(() => ({ wch: 18 }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Members');
+      XLSX.writeFile(wb, `members_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } catch (e: any) {
+      console.error('Excel export failed:', e);
+      alert('Failed to export Excel: ' + (e?.message || 'unknown error'));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const exportCSV = async () => {
+    setExporting(true);
+    try {
+      const rows = await buildExportData();
+      if (rows.length === 0) { alert('No members to export with current filters'); return; }
+      const headers = Object.keys(rows[0]);
+      const csvLines = [
+        headers.join(','),
+        ...rows.map((r: Record<string, string>) =>
+          headers.map((h) => {
+            const val = r[h] ?? '';
+            const escaped = String(val).replace(/"/g, '""');
+            return `"${escaped}"`;
+          }).join(',')
+        ),
+      ];
+      const blob = new Blob([csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `members_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      console.error('CSV export failed:', e);
+      alert('Failed to export CSV: ' + (e?.message || 'unknown error'));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const exportPDF = async () => {
+    setExporting(true);
+    try {
+      const rows = await buildExportData();
+      if (rows.length === 0) { alert('No members to export with current filters'); return; }
+      const doc = new jsPDF({ orientation: 'landscape' });
+      doc.setFontSize(16);
+      doc.text('WeVysya Members', 14, 15);
+      doc.setFontSize(9);
+      doc.setTextColor(120);
+      const filterDescParts: string[] = [];
+      if (statusFilter !== 'all') filterDescParts.push(`Status: ${statusFilter}`);
+      if (countryFilter) filterDescParts.push(`Country: ${countries.find((c) => c.id === countryFilter)?.name || ''}`);
+      if (stateFilter) filterDescParts.push(`State: ${allStates.find((s) => s.id === stateFilter)?.name || ''}`);
+      if (zoneFilter) filterDescParts.push(`Zone: ${allZones.find((z) => z.id === zoneFilter)?.name || ''}`);
+      if (houseFilter) filterDescParts.push(`House: ${allHouses.find((h) => h.id === houseFilter)?.name || ''}`);
+      const filterDesc = filterDescParts.length > 0 ? `Filters: ${filterDescParts.join(' | ')}` : 'Filters: None';
+      doc.text(`${filterDesc}  |  Total: ${rows.length}  |  ${new Date().toLocaleDateString()}`, 14, 21);
+
+      const headers = Object.keys(rows[0]);
+      const tableData = rows.map((r: Record<string, string>) => headers.map((h) => r[h] ?? ''));
+
+      autoTable(doc, {
+        head: [headers],
+        body: tableData,
+        startY: 26,
+        styles: { fontSize: 7, cellPadding: 1.5, overflow: 'linebreak' },
+        headStyles: { fillColor: [74, 222, 128], textColor: [11, 15, 14], fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [245, 248, 246] },
+        margin: { left: 14, right: 14 },
+      });
+
+      doc.save(`members_${new Date().toISOString().slice(0, 10)}.pdf`);
+    } catch (e: any) {
+      console.error('PDF export failed:', e);
+      alert('Failed to export PDF: ' + (e?.message || 'unknown error'));
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -110,6 +409,39 @@ export default function Members({ readOnly = false }: { readOnly?: boolean }) {
         </div>
         {canManageMembers && (
           <div className="flex items-center space-x-3">
+            <div className="relative group">
+              <button
+                disabled={exporting}
+                className="flex items-center space-x-2 px-6 py-3 rounded-xl font-medium border border-gray-800 text-white hover:bg-[#0F1412] transition-all-smooth disabled:opacity-50"
+              >
+                {exporting ? <Download className="w-5 h-5 animate-pulse" /> : <Download className="w-5 h-5" />}
+                <span>Export</span>
+                <ChevronDown className="w-4 h-4" />
+              </button>
+              <div className="absolute right-0 top-full mt-2 w-48 bg-card border border-gray-800 rounded-xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 overflow-hidden">
+                <button
+                  onClick={exportExcel}
+                  className="w-full flex items-center space-x-3 px-4 py-3 text-sm text-white hover:bg-[#0F1412] transition-all text-left"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-[#4ADE80]" />
+                  <span>Excel (.xlsx)</span>
+                </button>
+                <button
+                  onClick={exportCSV}
+                  className="w-full flex items-center space-x-3 px-4 py-3 text-sm text-white hover:bg-[#0F1412] transition-all text-left border-t border-gray-800/50"
+                >
+                  <FileText className="w-4 h-4 text-[#6EE7B7]" />
+                  <span>CSV (.csv)</span>
+                </button>
+                <button
+                  onClick={exportPDF}
+                  className="w-full flex items-center space-x-3 px-4 py-3 text-sm text-white hover:bg-[#0F1412] transition-all text-left border-t border-gray-800/50"
+                >
+                  <FileText className="w-4 h-4 text-red-400" />
+                  <span>PDF (.pdf)</span>
+                </button>
+              </div>
+            </div>
             <button
               onClick={() => setShowImportModal(true)}
               className="flex items-center space-x-2 px-6 py-3 rounded-xl font-medium border border-gray-800 text-white hover:bg-[#0F1412] transition-all-smooth"
@@ -141,12 +473,125 @@ export default function Members({ readOnly = false }: { readOnly?: boolean }) {
               className="w-full pl-12 pr-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow transition-all"
             />
           </div>
+          <button
+            onClick={() => setShowFilters((v) => !v)}
+            className={`flex items-center space-x-2 px-4 py-3 rounded-xl border transition-all ${showFilters || activeFilterCount > 0 ? 'border-[#6EE7B7]/50 text-[#6EE7B7]' : 'border-gray-800 text-[#9CA3AF] hover:text-white hover:border-gray-700'}`}
+          >
+            <Filter className="w-5 h-5" />
+            <span>Filters</span>
+            {activeFilterCount > 0 && (
+              <span
+                className="ml-1 text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center"
+                style={{ backgroundColor: '#4ADE80', color: '#0B0F0E' }}
+              >
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
           {totalCount > 0 && (
             <span className="text-sm text-[#6B7280] whitespace-nowrap">
               {totalCount} member{totalCount !== 1 ? 's' : ''}
             </span>
           )}
         </div>
+
+        {(showFilters || activeFilterCount > 0) && (
+          <div className="mb-6 p-4 rounded-xl bg-[#0F1412] border border-gray-800/50 animate-fade-in">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-medium text-[#9CA3AF]">Filter members by status and location</span>
+              {activeFilterCount > 0 && (
+                <button
+                  onClick={clearAllFilters}
+                  className="text-xs text-[#6EE7B7] hover:text-white transition-all flex items-center space-x-1"
+                >
+                  <X className="w-3 h-3" />
+                  <span>Clear all</span>
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+              <div>
+                <label className="block text-xs text-[#6B7280] mb-1.5">Status</label>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive')}
+                  className="w-full px-3 py-2.5 rounded-lg bg-[#0B0F0E] border border-gray-800 text-white text-sm focus:outline-none input-glow"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-[#6B7280] mb-1.5 flex items-center space-x-1">
+                  <Globe className="w-3 h-3" />
+                  <span>Country</span>
+                </label>
+                <select
+                  value={countryFilter}
+                  onChange={(e) => handleCountryChange(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-lg bg-[#0B0F0E] border border-gray-800 text-white text-sm focus:outline-none input-glow"
+                >
+                  <option value="">All Countries</option>
+                  {countries.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-[#6B7280] mb-1.5 flex items-center space-x-1">
+                  <MapPin className="w-3 h-3" />
+                  <span>State</span>
+                </label>
+                <select
+                  value={stateFilter}
+                  onChange={(e) => handleStateChange(e.target.value)}
+                  disabled={!countryFilter}
+                  className="w-full px-3 py-2.5 rounded-lg bg-[#0B0F0E] border border-gray-800 text-white text-sm focus:outline-none input-glow disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <option value="">All States</option>
+                  {statesForCountry.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-[#6B7280] mb-1.5 flex items-center space-x-1">
+                  <Layers className="w-3 h-3" />
+                  <span>Zone</span>
+                </label>
+                <select
+                  value={zoneFilter}
+                  onChange={(e) => handleZoneChange(e.target.value)}
+                  disabled={!stateFilter}
+                  className="w-full px-3 py-2.5 rounded-lg bg-[#0B0F0E] border border-gray-800 text-white text-sm focus:outline-none input-glow disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <option value="">All Zones</option>
+                  {zonesForState.map((z) => (
+                    <option key={z.id} value={z.id}>{z.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-[#6B7280] mb-1.5 flex items-center space-x-1">
+                  <Home className="w-3 h-3" />
+                  <span>House</span>
+                </label>
+                <select
+                  value={houseFilter}
+                  onChange={(e) => setHouseFilter(e.target.value)}
+                  disabled={!zoneFilter && housesForZone.length === 0}
+                  className="w-full px-3 py-2.5 rounded-lg bg-[#0B0F0E] border border-gray-800 text-white text-sm focus:outline-none input-glow disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <option value="">All Houses</option>
+                  {housesForZone.map((h) => (
+                    <option key={h.id} value={h.id}>{h.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
 
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
