@@ -26,6 +26,16 @@ interface HouseRow {
   deals: number;
   dealAmount: number;
 }
+interface MemberRow {
+  id: string;
+  name: string;
+  email: string;
+  linksGiven: number;
+  linksReceived: number;
+  totalLinks: number;
+  deals: number;
+  dealAmount: number;
+}
 
 interface Filters { house: string; zone: string; state: string; dateFrom: string; dateTo: string; }
 
@@ -37,6 +47,7 @@ export default function Reports() {
   const [loading, setLoading] = useState(true);
   const [zoneStats, setZoneStats] = useState<ZoneStat[]>([]);
   const [houseRows, setHouseRows] = useState<HouseRow[]>([]);
+  const [memberRows, setMemberRows] = useState<MemberRow[]>([]);
   const [allHouses, setAllHouses] = useState<HouseOption[]>([]);
   const [filters, setFilters] = useState<Filters>({ house: '', zone: '', state: '', dateFrom: '', dateTo: '' });
   const [showFilters, setShowFilters] = useState(false);
@@ -64,24 +75,24 @@ export default function Reports() {
       const hasDate = !!(filters.dateFrom || filters.dateTo);
 
       let membersPromise = isFiltered && houseIds.length
-        ? supabase.from('profiles').select('id, house_id').in('house_id', houseIds)
-        : supabase.from('profiles').select('id, house_id');
+        ? supabase.from('profiles').select('id, full_name, email, house_id').in('house_id', houseIds)
+        : supabase.from('profiles').select('id, full_name, email, house_id');
       if (hasDate) {
         membersPromise = membersPromise.gte('created_at', filters.dateFrom || '1900-01-01');
         if (filters.dateTo) membersPromise = membersPromise.lte('created_at', `${filters.dateTo}T23:59:59`);
       }
 
       let linksPromise = isFiltered && houseIds.length
-        ? supabase.from('core_links').select('id, house_id').in('house_id', houseIds)
-        : supabase.from('core_links').select('id, house_id');
+        ? supabase.from('core_links').select('id, house_id, from_member_id, to_member_id').in('house_id', houseIds)
+        : supabase.from('core_links').select('id, house_id, from_member_id, to_member_id');
       if (hasDate) {
         linksPromise = linksPromise.gte('created_at', filters.dateFrom || '1900-01-01');
         if (filters.dateTo) linksPromise = linksPromise.lte('created_at', `${filters.dateTo}T23:59:59`);
       }
 
       let dealsPromise = isFiltered && houseIds.length
-        ? supabase.from('core_deals').select('id, house_id, amount').in('house_id', houseIds)
-        : supabase.from('core_deals').select('id, house_id, amount');
+        ? supabase.from('core_deals').select('id, house_id, amount, from_member_id, to_member_id').in('house_id', houseIds)
+        : supabase.from('core_deals').select('id, house_id, amount, from_member_id, to_member_id');
       if (hasDate) {
         dealsPromise = dealsPromise.gte('created_at', filters.dateFrom || '1900-01-01');
         if (filters.dateTo) dealsPromise = dealsPromise.lte('created_at', `${filters.dateTo}T23:59:59`);
@@ -142,6 +153,28 @@ export default function Reports() {
       });
       setZoneStats(Object.entries(zoneMap).map(([zone, count]) => ({ zone, count })));
       setHouseRows(rows);
+
+      // Build member-level breakdown when a specific house is selected
+      let memberBreakdown: MemberRow[] = [];
+      if (filters.house && houseIds.length === 1 && membersData.length > 0) {
+        memberBreakdown = membersData.map((m) => {
+          const linksGiven = linksData.filter((l) => l.from_member_id === m.id).length;
+          const linksReceived = linksData.filter((l) => l.to_member_id === m.id).length;
+          const memberDeals = dealsData.filter((d) => d.from_member_id === m.id || d.to_member_id === m.id);
+          return {
+            id: m.id,
+            name: m.full_name || '—',
+            email: (m as any).email || '',
+            linksGiven,
+            linksReceived,
+            totalLinks: linksGiven + linksReceived,
+            deals: memberDeals.length,
+            dealAmount: memberDeals.reduce((s, d) => s + Number(d.amount || 0), 0),
+          };
+        }).filter((mr) => mr.totalLinks > 0 || mr.deals > 0)
+          .sort((a, b) => b.totalLinks - a.totalLinks || b.deals - a.deals);
+      }
+      setMemberRows(memberBreakdown);
     } catch (err) {
       console.error('Error fetching reports:', err);
     } finally {
@@ -210,12 +243,26 @@ export default function Reports() {
       ...houseRows.map((r) => [r.name, r.zone, r.state, r.country, r.members, r.links, r.deals, r.dealAmount]),
     ];
 
-    return { summary, zoneSheet, houseSheet };
+    const memberSheet = memberRows.length > 0
+      ? [
+          ['Member', 'Email', 'Links Given', 'Links Received', 'Total Links', 'Deals', 'Deal Amount (INR)'],
+          ...memberRows.map((mr) => [mr.name, mr.email, mr.linksGiven, mr.linksReceived, mr.totalLinks, mr.deals, mr.dealAmount]),
+        ]
+      : [];
+
+    return { summary, zoneSheet, houseSheet, memberSheet };
   };
 
   const exportCSV = () => {
-    const { summary, zoneSheet, houseSheet } = buildExportRows();
-    const rows = [...summary, [], ['Zone Distribution'], ...zoneSheet, [], ['House Details'], ...houseSheet];
+    const { summary, zoneSheet, houseSheet, memberSheet } = buildExportRows();
+    const rows = [
+      ...summary,
+      [], ['Zone Distribution'], ...zoneSheet,
+      [], ['House Details'], ...houseSheet,
+    ];
+    if (memberSheet.length > 0) {
+      rows.push([], ['Member Breakdown'], ...memberSheet);
+    }
     const csv = rows.map((r) => r.map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -227,11 +274,14 @@ export default function Reports() {
   };
 
   const exportExcel = () => {
-    const { summary, zoneSheet, houseSheet } = buildExportRows();
+    const { summary, zoneSheet, houseSheet, memberSheet } = buildExportRows();
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summary), 'Summary');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(zoneSheet), 'Zone Distribution');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(houseSheet), 'House Details');
+    if (memberSheet.length > 0) {
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(memberSheet), 'Member Breakdown');
+    }
     XLSX.writeFile(wb, `ghm-report-${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
@@ -457,6 +507,63 @@ export default function Reports() {
                   Clear filters
                 </button>
               )}
+            </div>
+          )}
+
+          {memberRows.length > 0 && (
+            <div className="bg-[#0F1412] border border-gray-800/50 rounded-2xl p-6 relative z-10">
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="text-lg font-bold text-white">Member Breakdown</h2>
+                <span className="text-xs text-[#9CA3AF] bg-gray-800/50 px-2 py-1 rounded-lg">
+                  {memberRows.length} {memberRows.length === 1 ? 'member' : 'members'}
+                </span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-800/60">
+                      {['Member', 'Links Given', 'Links Received', 'Total Links', 'Deals', 'Deal Value'].map((h, i) => (
+                        <th
+                          key={h}
+                          className={`pb-3 text-xs font-semibold text-[#9CA3AF] uppercase tracking-wide ${i >= 1 ? 'text-right' : 'text-left'} ${i < 5 ? 'pr-4' : ''}`}
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-800/30">
+                    {memberRows.map((mr, i) => (
+                      <tr key={i} className="hover:bg-gray-800/20 transition-colors group">
+                        <td className="py-3 pr-4 font-medium text-white group-hover:text-[#6EE7B7] transition-colors">{mr.name}</td>
+                        <td className="py-3 pr-4 text-right text-white">{mr.linksGiven}</td>
+                        <td className="py-3 pr-4 text-right text-white">{mr.linksReceived}</td>
+                        <td className="py-3 pr-4 text-right font-medium text-[#6EE7B7]">{mr.totalLinks}</td>
+                        <td className="py-3 pr-4 text-right text-white">{mr.deals}</td>
+                        <td className="py-3 text-right font-medium text-[#6EE7B7]">
+                          {mr.dealAmount > 0 ? `₹${mr.dealAmount.toLocaleString('en-IN')}` : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  {memberRows.length > 1 && (
+                    <tfoot>
+                      <tr className="border-t border-gray-700/60">
+                        <td className="pt-3 pr-4 text-xs font-bold text-[#9CA3AF] uppercase">Totals</td>
+                        <td className="pt-3 pr-4 text-right font-bold text-white">{memberRows.reduce((s, m) => s + m.linksGiven, 0)}</td>
+                        <td className="pt-3 pr-4 text-right font-bold text-white">{memberRows.reduce((s, m) => s + m.linksReceived, 0)}</td>
+                        <td className="pt-3 pr-4 text-right font-bold text-[#6EE7B7]">{memberRows.reduce((s, m) => s + m.totalLinks, 0)}</td>
+                        <td className="pt-3 pr-4 text-right font-bold text-white">{memberRows.reduce((s, m) => s + m.deals, 0)}</td>
+                        <td className="pt-3 text-right font-bold text-[#6EE7B7]">
+                          {memberRows.reduce((s, m) => s + m.dealAmount, 0) > 0
+                            ? `₹${memberRows.reduce((s, m) => s + m.dealAmount, 0).toLocaleString('en-IN')}`
+                            : '—'}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
             </div>
           )}
         </>
