@@ -25,6 +25,7 @@ interface HouseRow {
   links: number;
   deals: number;
   dealAmount: number;
+  i2we: number;
 }
 interface MemberRow {
   id: string;
@@ -35,6 +36,7 @@ interface MemberRow {
   totalLinks: number;
   deals: number;
   dealAmount: number;
+  i2we: number;
 }
 
 interface Filters { house: string; zone: string; state: string; dateFrom: string; dateTo: string; }
@@ -99,8 +101,8 @@ export default function Reports() {
       }
 
       let i2wePromise = isFiltered && houseIds.length
-        ? supabase.from('core_i2we').select('id, house_id').in('house_id', houseIds)
-        : supabase.from('core_i2we').select('id, house_id');
+        ? supabase.from('core_i2we').select('id, house_id, member_1_id, member_2_id').in('house_id', houseIds)
+        : supabase.from('core_i2we').select('id, house_id, member_1_id, member_2_id');
       if (hasDate) {
         i2wePromise = i2wePromise.gte('created_at', filters.dateFrom || '1900-01-01');
         if (filters.dateTo) i2wePromise = i2wePromise.lte('created_at', `${filters.dateTo}T23:59:59`);
@@ -140,6 +142,7 @@ export default function Reports() {
         links: linksData.filter((l) => l.house_id === house.id).length,
         deals: dealsData.filter((d) => d.house_id === house.id).length,
         dealAmount: dealsData.filter((d) => d.house_id === house.id).reduce((s, d) => s + Number(d.amount || 0), 0),
+        i2we: i2weData.filter((e) => e.house_id === house.id).length,
       }));
 
       setStats({
@@ -161,6 +164,7 @@ export default function Reports() {
           const linksGiven = linksData.filter((l) => l.from_member_id === m.id).length;
           const linksReceived = linksData.filter((l) => l.to_member_id === m.id).length;
           const memberDeals = dealsData.filter((d) => d.from_member_id === m.id || d.to_member_id === m.id);
+          const memberI2we = i2weData.filter((e) => e.member_1_id === m.id || e.member_2_id === m.id).length;
           return {
             id: m.id,
             name: m.full_name || '—',
@@ -170,8 +174,9 @@ export default function Reports() {
             totalLinks: linksGiven + linksReceived,
             deals: memberDeals.length,
             dealAmount: memberDeals.reduce((s, d) => s + Number(d.amount || 0), 0),
+            i2we: memberI2we,
           };
-        }).filter((mr) => mr.totalLinks > 0 || mr.deals > 0)
+        }).filter((mr) => mr.totalLinks > 0 || mr.deals > 0 || mr.i2we > 0)
           .sort((a, b) => b.totalLinks - a.totalLinks || b.deals - a.deals);
       }
       setMemberRows(memberBreakdown);
@@ -239,14 +244,14 @@ export default function Reports() {
     ];
 
     const houseSheet = [
-      ['House', 'Zone', 'State', 'Country', 'Members', 'Links', 'Deals', 'Deal Amount (INR)'],
-      ...houseRows.map((r) => [r.name, r.zone, r.state, r.country, r.members, r.links, r.deals, r.dealAmount]),
+      ['House', 'Zone', 'State', 'Country', 'Members', 'Links', 'Deals', 'Deal Amount (INR)', 'I2WE Events'],
+      ...houseRows.map((r) => [r.name, r.zone, r.state, r.country, r.members, r.links, r.deals, r.dealAmount, r.i2we]),
     ];
 
     const memberSheet = memberRows.length > 0
       ? [
-          ['Member', 'Email', 'Links Given', 'Links Received', 'Total Links', 'Deals', 'Deal Amount (INR)'],
-          ...memberRows.map((mr) => [mr.name, mr.email, mr.linksGiven, mr.linksReceived, mr.totalLinks, mr.deals, mr.dealAmount]),
+          ['Member', 'Email', 'Links Given', 'Links Received', 'Total Links', 'Deals', 'Deal Amount (INR)', 'I2WE Events'],
+          ...memberRows.map((mr) => [mr.name, mr.email, mr.linksGiven, mr.linksReceived, mr.totalLinks, mr.deals, mr.dealAmount, mr.i2we]),
         ]
       : [];
 
@@ -457,10 +462,10 @@ export default function Reports() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-800/60">
-                      {['House', 'Zone', 'State', 'Members', 'Links', 'Deals', 'Deal Value'].map((h, i) => (
+                      {['House', 'Zone', 'State', 'Members', 'Links', 'Deals', 'Deal Value', 'I2WE'].map((h, i) => (
                         <th
                           key={h}
-                          className={`pb-3 text-xs font-semibold text-[#9CA3AF] uppercase tracking-wide ${i >= 3 ? 'text-right' : 'text-left'} ${i < 6 ? 'pr-4' : ''}`}
+                          className={`pb-3 text-xs font-semibold text-[#9CA3AF] uppercase tracking-wide ${i >= 3 ? 'text-right' : 'text-left'} ${i < 7 ? 'pr-4' : ''}`}
                         >
                           {h}
                         </th>
@@ -476,9 +481,10 @@ export default function Reports() {
                         <td className="py-3 pr-4 text-right text-white">{row.members}</td>
                         <td className="py-3 pr-4 text-right text-white">{row.links}</td>
                         <td className="py-3 pr-4 text-right text-white">{row.deals}</td>
-                        <td className="py-3 text-right font-medium text-[#6EE7B7]">
+                        <td className="py-3 pr-4 text-right font-medium text-[#6EE7B7]">
                           {row.dealAmount > 0 ? `₹${row.dealAmount.toLocaleString('en-IN')}` : '—'}
                         </td>
+                        <td className="py-3 text-right text-white">{row.i2we}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -489,9 +495,10 @@ export default function Reports() {
                         <td className="pt-3 pr-4 text-right font-bold text-white">{stats.totalMembers}</td>
                         <td className="pt-3 pr-4 text-right font-bold text-white">{stats.totalLinks}</td>
                         <td className="pt-3 pr-4 text-right font-bold text-white">{stats.totalDeals}</td>
-                        <td className="pt-3 text-right font-bold text-[#6EE7B7]">
+                        <td className="pt-3 pr-4 text-right font-bold text-[#6EE7B7]">
                           {stats.totalDealAmount > 0 ? `₹${stats.totalDealAmount.toLocaleString('en-IN')}` : '—'}
                         </td>
+                        <td className="pt-3 text-right font-bold text-white">{stats.totalI2WE}</td>
                       </tr>
                     </tfoot>
                   )}
@@ -522,10 +529,10 @@ export default function Reports() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-800/60">
-                      {['Member', 'Links Given', 'Links Received', 'Total Links', 'Deals', 'Deal Value'].map((h, i) => (
+                      {['Member', 'Links Given', 'Links Received', 'Total Links', 'Deals', 'Deal Value', 'I2WE'].map((h, i) => (
                         <th
                           key={h}
-                          className={`pb-3 text-xs font-semibold text-[#9CA3AF] uppercase tracking-wide ${i >= 1 ? 'text-right' : 'text-left'} ${i < 5 ? 'pr-4' : ''}`}
+                          className={`pb-3 text-xs font-semibold text-[#9CA3AF] uppercase tracking-wide ${i >= 1 ? 'text-right' : 'text-left'} ${i < 6 ? 'pr-4' : ''}`}
                         >
                           {h}
                         </th>
@@ -540,9 +547,10 @@ export default function Reports() {
                         <td className="py-3 pr-4 text-right text-white">{mr.linksReceived}</td>
                         <td className="py-3 pr-4 text-right font-medium text-[#6EE7B7]">{mr.totalLinks}</td>
                         <td className="py-3 pr-4 text-right text-white">{mr.deals}</td>
-                        <td className="py-3 text-right font-medium text-[#6EE7B7]">
+                        <td className="py-3 pr-4 text-right font-medium text-[#6EE7B7]">
                           {mr.dealAmount > 0 ? `₹${mr.dealAmount.toLocaleString('en-IN')}` : '—'}
                         </td>
+                        <td className="py-3 text-right text-white">{mr.i2we}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -554,11 +562,12 @@ export default function Reports() {
                         <td className="pt-3 pr-4 text-right font-bold text-white">{memberRows.reduce((s, m) => s + m.linksReceived, 0)}</td>
                         <td className="pt-3 pr-4 text-right font-bold text-[#6EE7B7]">{memberRows.reduce((s, m) => s + m.totalLinks, 0)}</td>
                         <td className="pt-3 pr-4 text-right font-bold text-white">{memberRows.reduce((s, m) => s + m.deals, 0)}</td>
-                        <td className="pt-3 text-right font-bold text-[#6EE7B7]">
+                        <td className="pt-3 pr-4 text-right font-bold text-[#6EE7B7]">
                           {memberRows.reduce((s, m) => s + m.dealAmount, 0) > 0
                             ? `₹${memberRows.reduce((s, m) => s + m.dealAmount, 0).toLocaleString('en-IN')}`
                             : '—'}
                         </td>
+                        <td className="pt-3 text-right font-bold text-white">{memberRows.reduce((s, m) => s + m.i2we, 0)}</td>
                       </tr>
                     </tfoot>
                   )}
