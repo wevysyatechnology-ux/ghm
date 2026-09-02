@@ -1195,6 +1195,7 @@ function EditMemberModal({ member, onClose, onSuccess }: { member: Profile & { h
         .update({
           membership_status: formData.membership_status,
           is_suspended: !isActive,
+          mobile_app_access: formData.mobile_app_access === 'enabled',
         })
         .eq('id', member.id);
       if (upError) console.warn('users_profile update warning:', upError.message);
