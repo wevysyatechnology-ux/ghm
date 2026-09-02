@@ -18,6 +18,7 @@ interface RequestBody {
   industry?: string | null;
   mobile?: string | null;
   keywords?: string[];
+  mobile_app_access?: string;
 }
 
 Deno.serve(async (req: Request) => {
@@ -160,6 +161,7 @@ Deno.serve(async (req: Request) => {
       industry: body.industry || null,
       mobile: body.mobile || null,
       keywords: body.keywords || [],
+      mobile_app_access: body.mobile_app_access || 'enabled',
     };
 
     const { error: upsertError } = await supabase

@@ -29,6 +29,7 @@ export interface Profile {
   role: UserRole;
   approval_status?: 'pending' | 'approved' | 'rejected';
   membership_status?: 'active' | 'inactive' | 'resigned' | 'expired' | 'terminated';
+  mobile_app_access?: 'enabled' | 'disabled' | 'pending';
   house_id?: string;
   zone?: string;
   business?: string;

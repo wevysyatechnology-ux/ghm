@@ -8,6 +8,20 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 const MEMBERSHIP_STATUSES = ['active', 'inactive', 'resigned', 'expired', 'terminated'] as const;
+const MOBILE_APP_ACCESS_OPTIONS = ['enabled', 'disabled', 'pending'] as const;
+
+function mobileAppAccessStyle(status: string) {
+  switch (status) {
+    case 'enabled':
+      return { backgroundColor: 'rgba(74, 222, 128, 0.15)', color: '#4ADE80' };
+    case 'disabled':
+      return { backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#EF4444' };
+    case 'pending':
+      return { backgroundColor: 'rgba(251, 191, 36, 0.15)', color: '#FBBF24' };
+    default:
+      return { backgroundColor: 'rgba(74, 222, 128, 0.15)', color: '#4ADE80' };
+  }
+}
 
 function membershipStatusStyle(status: string) {
   switch (status) {
@@ -294,6 +308,7 @@ export default function Members({ readOnly: _readOnly = false }: { readOnly?: bo
       'Mobile': m.mobile || '',
       'Role': m.role.replace('_', ' '),
       'Membership Status': m.membership_status || 'active',
+      'Mobile App Access': m.mobile_app_access || 'enabled',
       'Business': m.business || '',
       'Industry': m.industry || '',
       'Zone': m.zone || m.house?.zone || '',
@@ -623,6 +638,12 @@ export default function Members({ readOnly: _readOnly = false }: { readOnly?: bo
                         >
                           {member.membership_status || 'active'}
                         </span>
+                        <span
+                          className="inline-block mt-1 ml-1 text-xs px-2 py-0.5 rounded-full font-medium capitalize"
+                          style={mobileAppAccessStyle(member.mobile_app_access || 'enabled')}
+                        >
+                          App: {member.mobile_app_access || 'enabled'}
+                        </span>
                       </div>
                     </div>
                     {canManageMembers && (
@@ -841,6 +862,7 @@ function AddMemberModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
     industry: '',
     mobile: '',
     keywords: '',
+    mobile_app_access: 'enabled' as 'enabled' | 'disabled' | 'pending',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -894,6 +916,7 @@ function AddMemberModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
           industry: formData.industry || null,
           mobile: formData.mobile || null,
           keywords: keywordsArray,
+          mobile_app_access: formData.mobile_app_access,
         },
       });
 
@@ -1090,6 +1113,7 @@ function EditMemberModal({ member, onClose, onSuccess }: { member: Profile & { h
     full_name: member.full_name,
     role: member.role,
     membership_status: (member.membership_status || 'active') as 'active' | 'inactive' | 'resigned' | 'expired' | 'terminated',
+    mobile_app_access: (member.mobile_app_access || 'enabled') as 'enabled' | 'disabled' | 'pending',
     house_id: member.house_id || '',
     zone: member.zone || '',
     business: member.business || '',
@@ -1150,6 +1174,7 @@ function EditMemberModal({ member, onClose, onSuccess }: { member: Profile & { h
         full_name: formData.full_name,
         role: formData.role,
         membership_status: formData.membership_status,
+        mobile_app_access: formData.mobile_app_access,
         keywords: keywordsArray,
         house_id: formData.house_id || null,
         zone: formData.zone || null,
@@ -1251,6 +1276,18 @@ function EditMemberModal({ member, onClose, onSuccess }: { member: Profile & { h
               >
                 {MEMBERSHIP_STATUSES.map(s => (
                   <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Mobile App Access *</label>
+              <select
+                value={formData.mobile_app_access}
+                onChange={(e) => setFormData({ ...formData, mobile_app_access: e.target.value as typeof formData.mobile_app_access })}
+                className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white focus:outline-none input-glow"
+              >
+                {MOBILE_APP_ACCESS_OPTIONS.map(o => (
+                  <option key={o} value={o}>{o.charAt(0).toUpperCase() + o.slice(1)}</option>
                 ))}
               </select>
             </div>
@@ -1410,6 +1447,12 @@ function MemberDetailModal({
                 style={membershipStatusStyle(member.membership_status || 'active')}
               >
                 {member.membership_status || 'active'}
+              </span>
+              <span
+                className="inline-block mt-2 ml-2 text-xs px-3 py-1 rounded-full font-medium capitalize"
+                style={mobileAppAccessStyle(member.mobile_app_access || 'enabled')}
+              >
+                App Access: {member.mobile_app_access || 'enabled'}
               </span>
             </div>
           </div>

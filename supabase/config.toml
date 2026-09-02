@@ -1,0 +1,11 @@
+[functions.create-member]
+verify_jwt = true
+
+[functions.delete-member]
+verify_jwt = true
+
+[functions.change-user-password]
+verify_jwt = true
+
+[functions.create-event-notification]
+verify_jwt = true
