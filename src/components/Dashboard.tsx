@@ -21,10 +21,20 @@ export default function Dashboard() {
     fetchStats();
   }, []);
 
+  const isHouseAdmin = profile?.role === 'house_admin';
+  const isZoneAdmin = profile?.role === 'zone_admin';
+
   const fetchStats = async () => {
     try {
+      let housesQuery = supabase.from('houses').select('id', { count: 'exact', head: true });
+      if (isHouseAdmin && profile?.house_id) {
+        housesQuery = housesQuery.eq('id', profile.house_id);
+      } else if (isZoneAdmin && profile?.zone) {
+        housesQuery = housesQuery.eq('zone', profile.zone);
+      }
+
       const [housesRes, membersRes, linksRes, dealsRes, i2weRes, attendanceRes, eventsRes] = await Promise.all([
-        supabase.from('houses').select('id', { count: 'exact', head: true }),
+        housesQuery,
         supabase.from('profiles').select('id', { count: 'exact', head: true }),
         supabase.from('core_links').select('id', { count: 'exact', head: true }),
         supabase.from('core_deals').select('id', { count: 'exact', head: true }),
