@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { BarChart3, Download, Filter, X, ChevronDown, FileSpreadsheet, Calendar } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 import * as XLSX from 'xlsx';
 
 interface HouseOption { id: string; name: string; zone: string; state: string; country: string; }
@@ -42,6 +43,9 @@ interface MemberRow {
 interface Filters { house: string; zone: string; state: string; dateFrom: string; dateTo: string; }
 
 export default function Reports() {
+  const { profile } = useAuth();
+  const isHouseAdmin = profile?.role === 'house_admin' && Boolean(profile.house_id);
+  const houseAdminHouseId = isHouseAdmin ? profile?.house_id : undefined;
   const [stats, setStats] = useState<Stats>({
     totalHouses: 0, totalMembers: 0, totalLinks: 0,
     totalDeals: 0, totalDealAmount: 0, totalI2WE: 0, totalAttendance: 0,
@@ -55,63 +59,74 @@ export default function Reports() {
   const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
-    supabase.from('houses').select('id, name, zone, state, country').order('name').then(({ data }) => {
+    let housesQuery = supabase.from('houses').select('id, name, zone, state, country').order('name');
+    if (isHouseAdmin && houseAdminHouseId) housesQuery = housesQuery.eq('id', houseAdminHouseId);
+    housesQuery.then(({ data }) => {
       if (data) setAllHouses(data);
     });
-  }, []);
+  }, [isHouseAdmin, houseAdminHouseId]);
+
+  useEffect(() => {
+    if (isHouseAdmin && houseAdminHouseId && filters.house !== houseAdminHouseId) {
+      setFilters((current) => ({ ...current, house: houseAdminHouseId, zone: '', state: '' }));
+    }
+  }, [isHouseAdmin, houseAdminHouseId, filters.house]);
 
   const fetchReports = useCallback(async () => {
     setLoading(true);
     try {
+      const reportFilters = isHouseAdmin && houseAdminHouseId
+        ? { ...filters, house: houseAdminHouseId, zone: '', state: '' }
+        : filters;
       let housesQuery = supabase.from('houses').select('id, name, zone, state, country');
-      if (filters.house) housesQuery = housesQuery.eq('id', filters.house);
-      else if (filters.zone) housesQuery = housesQuery.eq('zone', filters.zone);
-      else if (filters.state) housesQuery = housesQuery.eq('state', filters.state);
-      if (filters.dateFrom) housesQuery = housesQuery.gte('created_at', filters.dateFrom);
-      if (filters.dateTo) housesQuery = housesQuery.lte('created_at', `${filters.dateTo}T23:59:59`);
+      if (reportFilters.house) housesQuery = housesQuery.eq('id', reportFilters.house);
+      else if (reportFilters.zone) housesQuery = housesQuery.eq('zone', reportFilters.zone);
+      else if (reportFilters.state) housesQuery = housesQuery.eq('state', reportFilters.state);
+      if (reportFilters.dateFrom) housesQuery = housesQuery.gte('created_at', reportFilters.dateFrom);
+      if (reportFilters.dateTo) housesQuery = housesQuery.lte('created_at', `${reportFilters.dateTo}T23:59:59`);
 
       const { data: housesData } = await housesQuery;
       const houseIds = (housesData || []).map((h) => h.id);
 
-      const isFiltered = !!(filters.house || filters.zone || filters.state);
-      const hasDate = !!(filters.dateFrom || filters.dateTo);
+      const isFiltered = !!(reportFilters.house || reportFilters.zone || reportFilters.state);
+      const hasDate = !!(reportFilters.dateFrom || reportFilters.dateTo);
 
       let membersPromise = isFiltered && houseIds.length
         ? supabase.from('profiles').select('id, full_name, email, house_id').in('house_id', houseIds)
         : supabase.from('profiles').select('id, full_name, email, house_id');
       if (hasDate) {
-        membersPromise = membersPromise.gte('created_at', filters.dateFrom || '1900-01-01');
-        if (filters.dateTo) membersPromise = membersPromise.lte('created_at', `${filters.dateTo}T23:59:59`);
+        membersPromise = membersPromise.gte('created_at', reportFilters.dateFrom || '1900-01-01');
+        if (reportFilters.dateTo) membersPromise = membersPromise.lte('created_at', `${reportFilters.dateTo}T23:59:59`);
       }
 
       let linksPromise = isFiltered && houseIds.length
         ? supabase.from('core_links').select('id, house_id, from_member_id, to_member_id').in('house_id', houseIds)
         : supabase.from('core_links').select('id, house_id, from_member_id, to_member_id');
       if (hasDate) {
-        linksPromise = linksPromise.gte('created_at', filters.dateFrom || '1900-01-01');
-        if (filters.dateTo) linksPromise = linksPromise.lte('created_at', `${filters.dateTo}T23:59:59`);
+        linksPromise = linksPromise.gte('created_at', reportFilters.dateFrom || '1900-01-01');
+        if (reportFilters.dateTo) linksPromise = linksPromise.lte('created_at', `${reportFilters.dateTo}T23:59:59`);
       }
 
       let dealsPromise = isFiltered && houseIds.length
         ? supabase.from('core_deals').select('id, house_id, amount, from_member_id, to_member_id').in('house_id', houseIds)
         : supabase.from('core_deals').select('id, house_id, amount, from_member_id, to_member_id');
       if (hasDate) {
-        dealsPromise = dealsPromise.gte('created_at', filters.dateFrom || '1900-01-01');
-        if (filters.dateTo) dealsPromise = dealsPromise.lte('created_at', `${filters.dateTo}T23:59:59`);
+        dealsPromise = dealsPromise.gte('created_at', reportFilters.dateFrom || '1900-01-01');
+        if (reportFilters.dateTo) dealsPromise = dealsPromise.lte('created_at', `${reportFilters.dateTo}T23:59:59`);
       }
 
       let i2wePromise = isFiltered && houseIds.length
         ? supabase.from('core_i2we').select('id, house_id, member_1_id, member_2_id').in('house_id', houseIds)
         : supabase.from('core_i2we').select('id, house_id, member_1_id, member_2_id');
       if (hasDate) {
-        i2wePromise = i2wePromise.gte('created_at', filters.dateFrom || '1900-01-01');
-        if (filters.dateTo) i2wePromise = i2wePromise.lte('created_at', `${filters.dateTo}T23:59:59`);
+        i2wePromise = i2wePromise.gte('created_at', reportFilters.dateFrom || '1900-01-01');
+        if (reportFilters.dateTo) i2wePromise = i2wePromise.lte('created_at', `${reportFilters.dateTo}T23:59:59`);
       }
 
       let attendancePromise = supabase.from('event_attendance').select('id', { count: 'exact', head: true });
       if (hasDate) {
-        attendancePromise = attendancePromise.gte('created_at', filters.dateFrom || '1900-01-01');
-        if (filters.dateTo) attendancePromise = attendancePromise.lte('created_at', `${filters.dateTo}T23:59:59`);
+        attendancePromise = attendancePromise.gte('created_at', reportFilters.dateFrom || '1900-01-01');
+        if (reportFilters.dateTo) attendancePromise = attendancePromise.lte('created_at', `${reportFilters.dateTo}T23:59:59`);
       }
 
       const [membersRes, linksRes, dealsRes, i2weRes, attendanceRes] = await Promise.all([
@@ -159,7 +174,7 @@ export default function Reports() {
 
       // Build member-level breakdown when a specific house is selected
       let memberBreakdown: MemberRow[] = [];
-      if (filters.house && houseIds.length === 1 && membersData.length > 0) {
+      if (reportFilters.house && houseIds.length === 1 && membersData.length > 0) {
         memberBreakdown = membersData.map((m) => {
           const linksGiven = linksData.filter((l) => l.from_member_id === m.id).length;
           const linksReceived = linksData.filter((l) => l.to_member_id === m.id).length;
@@ -185,7 +200,7 @@ export default function Reports() {
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, [filters, isHouseAdmin, houseAdminHouseId]);
 
   useEffect(() => { fetchReports(); }, [fetchReports]);
 
