@@ -46,6 +46,8 @@ export default function Reports() {
   const { profile } = useAuth();
   const isHouseAdmin = profile?.role === 'house_admin' && Boolean(profile.house_id);
   const houseAdminHouseId = isHouseAdmin ? profile?.house_id : undefined;
+  const isZoneAdmin = profile?.role === 'zone_admin' && Boolean(profile?.zone);
+  const zoneAdminZone = isZoneAdmin ? profile?.zone : undefined;
   const [stats, setStats] = useState<Stats>({
     totalHouses: 0, totalMembers: 0, totalLinks: 0,
     totalDeals: 0, totalDealAmount: 0, totalI2WE: 0, totalAttendance: 0,
@@ -61,22 +63,27 @@ export default function Reports() {
   useEffect(() => {
     let housesQuery = supabase.from('houses').select('id, name, zone, state, country').order('name');
     if (isHouseAdmin && houseAdminHouseId) housesQuery = housesQuery.eq('id', houseAdminHouseId);
+    else if (isZoneAdmin && zoneAdminZone) housesQuery = housesQuery.eq('zone', zoneAdminZone);
     housesQuery.then(({ data }) => {
       if (data) setAllHouses(data);
     });
-  }, [isHouseAdmin, houseAdminHouseId]);
+  }, [isHouseAdmin, houseAdminHouseId, isZoneAdmin, zoneAdminZone]);
 
   useEffect(() => {
     if (isHouseAdmin && houseAdminHouseId && filters.house !== houseAdminHouseId) {
       setFilters((current) => ({ ...current, house: houseAdminHouseId, zone: '', state: '' }));
+    } else if (isZoneAdmin && zoneAdminZone && filters.zone !== zoneAdminZone) {
+      setFilters((current) => ({ ...current, zone: zoneAdminZone, house: '', state: '' }));
     }
-  }, [isHouseAdmin, houseAdminHouseId, filters.house]);
+  }, [isHouseAdmin, houseAdminHouseId, isZoneAdmin, zoneAdminZone, filters.house, filters.zone]);
 
   const fetchReports = useCallback(async () => {
     setLoading(true);
     try {
       const reportFilters = isHouseAdmin && houseAdminHouseId
         ? { ...filters, house: houseAdminHouseId, zone: '', state: '' }
+        : isZoneAdmin && zoneAdminZone
+        ? { ...filters, zone: zoneAdminZone, state: '' }
         : filters;
       let housesQuery = supabase.from('houses').select('id, name, zone, state, country');
       if (reportFilters.house) housesQuery = housesQuery.eq('id', reportFilters.house);
@@ -200,7 +207,7 @@ export default function Reports() {
     } finally {
       setLoading(false);
     }
-  }, [filters, isHouseAdmin, houseAdminHouseId]);
+  }, [filters, isHouseAdmin, houseAdminHouseId, isZoneAdmin, zoneAdminZone]);
 
   useEffect(() => { fetchReports(); }, [fetchReports]);
 
@@ -368,6 +375,7 @@ export default function Reports() {
               onChange={(v) => setFilters({ house: '', zone: '', state: v, dateFrom: filters.dateFrom, dateTo: filters.dateTo })}
               placeholder="All States"
               options={uniqueStates.map((s) => ({ value: s, label: s }))}
+              disabled={isHouseAdmin || isZoneAdmin}
             />
             <FilterSelect
               label="Zone"
@@ -375,6 +383,7 @@ export default function Reports() {
               onChange={(v) => setFilters((f) => ({ ...f, house: '', zone: v }))}
               placeholder="All Zones"
               options={zonesForState.map((z) => ({ value: z, label: z }))}
+              disabled={isHouseAdmin || isZoneAdmin}
             />
             <FilterSelect
               label="House"
@@ -382,6 +391,7 @@ export default function Reports() {
               onChange={(v) => setFilters((f) => ({ ...f, house: v }))}
               placeholder="All Houses"
               options={housesForFilter.map((h) => ({ value: h.id, label: h.name }))}
+              disabled={isHouseAdmin}
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
@@ -403,13 +413,13 @@ export default function Reports() {
 
       {activeFilterCount > 0 && (
         <div className="relative z-10 flex flex-wrap gap-2">
-          {filters.state && (
+          {filters.state && !isZoneAdmin && !isHouseAdmin && (
             <FilterTag label={`State: ${filters.state}`} onRemove={() => setFilters((f) => ({ ...f, state: '' }))} />
           )}
-          {filters.zone && (
+          {filters.zone && !isZoneAdmin && !isHouseAdmin && (
             <FilterTag label={`Zone: ${filters.zone}`} onRemove={() => setFilters((f) => ({ ...f, house: '', zone: '' }))} />
           )}
-          {filters.house && (
+          {filters.house && !isHouseAdmin && (
             <FilterTag
               label={`House: ${allHouses.find((h) => h.id === filters.house)?.name}`}
               onRemove={() => setFilters((f) => ({ ...f, house: '' }))}
@@ -597,13 +607,14 @@ export default function Reports() {
 }
 
 function FilterSelect({
-  label, value, onChange, placeholder, options,
+  label, value, onChange, placeholder, options, disabled,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   placeholder: string;
   options: { value: string; label: string }[];
+  disabled?: boolean;
 }) {
   return (
     <div>
@@ -612,7 +623,8 @@ function FilterSelect({
         <select
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full appearance-none bg-[#0D1410] border border-gray-700/50 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#6EE7B7]/50 pr-8"
+          disabled={disabled}
+          className="w-full appearance-none bg-[#0D1410] border border-gray-700/50 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#6EE7B7]/50 pr-8 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <option value="">{placeholder}</option>
           {options.map((o) => (
