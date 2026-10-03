@@ -305,11 +305,24 @@ export default function Members({ readOnly: _readOnly = false }: { readOnly?: bo
     return (data || []).map((m: Profile & { house?: House }) => ({
       'Full Name': m.full_name || '',
       'Email': m.email || '',
-      'Mobile': m.mobile || '',
+      'Mobile': m.mobile || m.phone_number || '',
+      'Phone Number': m.phone_number || m.mobile || '',
       'Role': m.role.replace('_', ' '),
       'Membership Status': m.membership_status || 'active',
       'Mobile App Access': m.mobile_app_access || 'enabled',
-      'Business': m.business || '',
+      'Business': m.business || m.company_name || '',
+      'Company Name': m.company_name || m.business || '',
+      'Introduced By': m.introduced_by || '',
+      'Address': m.address || '',
+      'Date of Birth': m.date_of_birth || '',
+      'Marital Status': m.marital_status || '',
+      'Business Category': m.business_category || '',
+      'Sub Category': m.sub_category || '',
+      'Business Type': m.business_type || '',
+      'GST Number': m.gst_number || '',
+      'Website': m.website || '',
+      'State': m.state || '',
+      'City': m.city || '',
       'Industry': m.industry || '',
       'Zone': m.zone || m.house?.zone || '',
       'House': m.house?.name || '',
@@ -676,10 +689,28 @@ export default function Members({ readOnly: _readOnly = false }: { readOnly?: bo
                       <span className="text-[#6B7280]">Email:</span>
                       <p className="text-[#9CA3AF] truncate">{member.email}</p>
                     </div>
-                    {member.business && (
+                    {(member.company_name || member.business) && (
                       <div>
-                        <span className="text-[#6B7280]">Business:</span>
-                        <p className="text-[#9CA3AF]">{member.business}</p>
+                        <span className="text-[#6B7280]">Company:</span>
+                        <p className="text-[#9CA3AF]">{member.company_name || member.business}</p>
+                      </div>
+                    )}
+                    {(member.phone_number || member.mobile) && (
+                      <div>
+                        <span className="text-[#6B7280]">Phone:</span>
+                        <p className="text-[#9CA3AF]">{member.phone_number || member.mobile}</p>
+                      </div>
+                    )}
+                    {member.business_category && (
+                      <div>
+                        <span className="text-[#6B7280]">Category:</span>
+                        <p className="text-[#9CA3AF]">{member.business_category}{member.sub_category ? ` / ${member.sub_category}` : ''}</p>
+                      </div>
+                    )}
+                    {(member.city || member.state) && (
+                      <div>
+                        <span className="text-[#6B7280]">Location:</span>
+                        <p className="text-[#9CA3AF]">{[member.city, member.state].filter(Boolean).join(', ')}</p>
                       </div>
                     )}
                     {member.industry && (
@@ -1466,17 +1497,17 @@ function MemberDetailModal({
               <p className="text-[#9CA3AF] pl-6">{member.email}</p>
             </div>
 
-            {member.mobile && (
+            {(member.mobile || member.phone_number) && (
               <div className="space-y-2">
                 <div className="flex items-center space-x-2 text-[#6B7280]">
                   <Phone className="w-4 h-4" />
-                  <span className="text-sm font-medium">Mobile</span>
+                  <span className="text-sm font-medium">Phone</span>
                 </div>
-                <p className="text-[#9CA3AF] pl-6">{member.mobile}</p>
+                <p className="text-[#9CA3AF] pl-6">{member.phone_number || member.mobile}</p>
               </div>
             )}
 
-            {member.business && (
+            {(member.company_name || member.business) && (
               <div className="space-y-2">
                 <div className="flex items-center space-x-2 text-[#6B7280]">
                   <Building className="w-4 h-4" />
@@ -1495,6 +1526,25 @@ function MemberDetailModal({
                 <p className="text-[#9CA3AF] pl-6">{member.industry}</p>
               </div>
             )}
+
+            {[
+              ['Introduced By', member.introduced_by],
+              ['Address', member.address],
+              ['Date of Birth', member.date_of_birth],
+              ['Marital Status', member.marital_status],
+              ['Business Category', member.business_category],
+              ['Sub Category', member.sub_category],
+              ['Business Type', member.business_type],
+              ['GST Number', member.gst_number],
+              ['Website', member.website],
+              ['State', member.state],
+              ['City', member.city],
+            ].filter(([, value]) => value).map(([label, value]) => (
+              <div key={label} className="space-y-2">
+                <div className="text-[#6B7280] text-sm font-medium">{label}</div>
+                <p className="text-[#9CA3AF] break-words">{value}</p>
+              </div>
+            ))}
 
             {member.zone && (
               <div className="space-y-2">

@@ -37,6 +37,19 @@ export interface Profile {
   keywords?: string[];
   avatar_url?: string;
   mobile?: string;
+  phone_number?: string;
+  company_name?: string;
+  introduced_by?: string;
+  address?: string;
+  date_of_birth?: string;
+  marital_status?: string;
+  business_category?: string;
+  sub_category?: string;
+  business_type?: string;
+  gst_number?: string;
+  website?: string;
+  state?: string;
+  city?: string;
   created_at: string;
 }
 

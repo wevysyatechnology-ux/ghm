@@ -9,11 +9,22 @@ export default function Signup({ onBackToLogin }: { onBackToLogin: () => void })
     password: '',
     confirmPassword: '',
     full_name: '',
-    mobile: '',
-    business: '',
-    industry: '',
+    phone_number: '',
+    company_name: '',
+    introduced_by: '',
+    address: '',
+    date_of_birth: '',
+    marital_status: '',
+    business_category: '',
+    sub_category: '',
+    business_type: '',
+    gst_number: '',
+    website: '',
+    state: '',
+    city: '',
     house_id: '',
   });
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [houses, setHouses] = useState<House[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -53,6 +64,10 @@ export default function Signup({ onBackToLogin }: { onBackToLogin: () => void })
         throw new Error('Password must be at least 6 characters');
       }
 
+      if (!termsAccepted) {
+        throw new Error('Please agree to the terms and conditions');
+      }
+
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
@@ -60,9 +75,21 @@ export default function Signup({ onBackToLogin }: { onBackToLogin: () => void })
           emailRedirectTo: undefined,
           data: {
             full_name: formData.full_name,
-            mobile: formData.mobile || null,
-            business: formData.business || null,
-            industry: formData.industry || null,
+            mobile: formData.phone_number || null,
+            phone_number: formData.phone_number || null,
+            company_name: formData.company_name || null,
+            business: formData.company_name || null,
+            introduced_by: formData.introduced_by || null,
+            address: formData.address || null,
+            date_of_birth: formData.date_of_birth || null,
+            marital_status: formData.marital_status || null,
+            business_category: formData.business_category || null,
+            sub_category: formData.sub_category || null,
+            business_type: formData.business_type || null,
+            gst_number: formData.gst_number || null,
+            website: formData.website || null,
+            state: formData.state || null,
+            city: formData.city || null,
             house_id: formData.house_id || null,
           },
         },
@@ -161,7 +188,7 @@ export default function Signup({ onBackToLogin }: { onBackToLogin: () => void })
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Full Name *</label>
                 <input
@@ -187,39 +214,113 @@ export default function Signup({ onBackToLogin }: { onBackToLogin: () => void })
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Mobile</label>
+                <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Phone No. *</label>
                 <input
                   type="tel"
-                  value={formData.mobile}
-                  onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
+                  value={formData.phone_number}
+                  onChange={(e) => setFormData({ ...formData, phone_number: e.target.value })}
                   className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow transition-all"
                   placeholder="9876543210"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Business</label>
+                <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Company Name *</label>
                 <input
                   type="text"
-                  value={formData.business}
-                  onChange={(e) => setFormData({ ...formData, business: e.target.value })}
+                  value={formData.company_name}
+                  onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
                   className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow transition-all"
-                  placeholder="Technology Solutions"
+                  placeholder="Company name"
+                  required
                 />
               </div>
 
-              <div className="col-span-2">
-                <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Industry</label>
+              <div>
+                <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Introduced By</label>
                 <input
                   type="text"
-                  value={formData.industry}
-                  onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
+                  value={formData.introduced_by}
+                  onChange={(e) => setFormData({ ...formData, introduced_by: e.target.value })}
                   className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow transition-all"
-                  placeholder="Information Technology"
+                  placeholder="Name"
                 />
               </div>
 
-              <div className="col-span-2">
+              <div>
+                <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Address</label>
+                <input type="text" value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow transition-all" placeholder="Address" />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Date of Birth (Optional)</label>
+                <input type="date" value={formData.date_of_birth} onChange={(e) => setFormData({ ...formData, date_of_birth: e.target.value })} className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white focus:outline-none input-glow transition-all" />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Marital Status (Optional)</label>
+                <select value={formData.marital_status} onChange={(e) => setFormData({ ...formData, marital_status: e.target.value })} className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white focus:outline-none input-glow transition-all">
+                  <option value="">Select status</option>
+                  <option value="single">Single</option>
+                  <option value="married">Married</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Business Category</label>
+                <select value={formData.business_category} onChange={(e) => setFormData({ ...formData, business_category: e.target.value })} className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white focus:outline-none input-glow transition-all">
+                  <option value="">Select category</option>
+                  <option value="services">Services</option>
+                  <option value="manufacturing">Manufacturing</option>
+                  <option value="trading">Trading</option>
+                  <option value="retail">Retail</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Sub Category</label>
+                <input type="text" value={formData.sub_category} onChange={(e) => setFormData({ ...formData, sub_category: e.target.value })} className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow transition-all" placeholder="Sub category" />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Business Type</label>
+                <select value={formData.business_type} onChange={(e) => setFormData({ ...formData, business_type: e.target.value })} className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white focus:outline-none input-glow transition-all">
+                  <option value="">Select type</option>
+                  <option value="proprietorship">Proprietorship</option>
+                  <option value="partnership">Partnership</option>
+                  <option value="private_limited">Private Limited</option>
+                  <option value="llp">LLP</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">GST No. (Optional)</label>
+                <input type="text" value={formData.gst_number} onChange={(e) => setFormData({ ...formData, gst_number: e.target.value })} className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow transition-all" placeholder="GST number" />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Website (Optional)</label>
+                <input type="url" value={formData.website} onChange={(e) => setFormData({ ...formData, website: e.target.value })} className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow transition-all" placeholder="https://example.com" />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">State</label>
+                <input type="text" value={formData.state} onChange={(e) => setFormData({ ...formData, state: e.target.value })} className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow transition-all" placeholder="State" />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">City</label>
+                <input type="text" value={formData.city} onChange={(e) => setFormData({ ...formData, city: e.target.value })} className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow transition-all" placeholder="City" />
+              </div>
+
+              <div className="md:col-span-2 pt-2">
+                <h2 className="text-lg font-bold text-white">Membership Applying for?</h2>
+              </div>
+
+              <div className="md:col-span-2">
                 <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Select House *</label>
                 <select
                   value={formData.house_id}
@@ -286,6 +387,11 @@ export default function Signup({ onBackToLogin }: { onBackToLogin: () => void })
                 {error}
               </div>
             )}
+
+            <label className="flex items-start gap-3 text-sm text-[#9CA3AF] cursor-pointer">
+              <input type="checkbox" checked={termsAccepted} onChange={(e) => setTermsAccepted(e.target.checked)} className="mt-1 accent-[#4ADE80]" required />
+              <span>I agree to the terms &amp; conditions</span>
+            </label>
 
             <div className="p-3 rounded-xl bg-blue-900/20 border border-blue-800/50 text-blue-400 text-sm">
               <p className="font-medium mb-1">Account Approval Required</p>
