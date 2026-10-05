@@ -139,7 +139,7 @@ export default function Signup({ onBackToLogin }: { onBackToLogin: () => void })
               <div className="p-4 rounded-xl bg-yellow-900/20 border border-yellow-800/50 text-yellow-400 text-sm">
                 <p className="font-medium mb-2">What happens next?</p>
                 <ul className="text-left space-y-2 text-yellow-300/90">
-                  <li>• Your registration will be reviewed by an administrator</li>
+                  <li>• Your registration will be reviewed by an global admin</li>
                   <li>• You'll receive an email once your account is approved</li>
                   <li>• After approval, you can login with your credentials</li>
                 </ul>
@@ -396,7 +396,7 @@ export default function Signup({ onBackToLogin }: { onBackToLogin: () => void })
             <div className="p-3 rounded-xl bg-blue-900/20 border border-blue-800/50 text-blue-400 text-sm">
               <p className="font-medium mb-1">Account Approval Required</p>
               <p className="text-blue-300/80 text-xs">
-                Your account will be reviewed by an administrator before you can login.
+                Your account will be reviewed by an global admin before you can login.
               </p>
             </div>
 
