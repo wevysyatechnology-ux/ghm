@@ -24,6 +24,7 @@ export interface Zone {
 
 export interface Profile {
   id: string;
+  membership_code: string;
   email: string;
   full_name: string;
   role: UserRole;

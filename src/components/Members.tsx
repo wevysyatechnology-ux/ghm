@@ -303,6 +303,7 @@ export default function Members({ readOnly: _readOnly = false }: { readOnly?: bo
     if (error) throw error;
 
     return (data || []).map((m: Profile & { house?: House }) => ({
+      'Membership Code': m.membership_code || '',
       'Full Name': m.full_name || '',
       'Email': m.email || '',
       'Mobile': m.mobile || m.phone_number || '',
@@ -644,6 +645,7 @@ export default function Members({ readOnly: _readOnly = false }: { readOnly?: bo
                       </div>
                       <div>
                         <h3 className="font-semibold">{member.full_name}</h3>
+                        <p className="text-xs font-mono text-[#6EE7B7]">{member.membership_code}</p>
                         <p className="text-xs text-[#9CA3AF] capitalize">{member.role.replace('_', ' ')}</p>
                         <span
                           className="inline-block mt-1 text-xs px-2 py-0.5 rounded-full font-medium capitalize"
@@ -1472,6 +1474,7 @@ function MemberDetailModal({
             </div>
             <div>
               <h3 className="text-2xl font-bold">{member.full_name}</h3>
+              <p className="text-sm font-mono text-[#6EE7B7]">{member.membership_code}</p>
               <p className="text-[#9CA3AF] capitalize">{member.role.replace('_', ' ')}</p>
               <span
                 className="inline-block mt-2 text-xs px-3 py-1 rounded-full font-medium capitalize"
