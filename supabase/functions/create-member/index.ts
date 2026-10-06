@@ -173,7 +173,7 @@ Deno.serve(async (req: Request) => {
       throw new Error(`Failed to update profile: ${upsertError.message}`);
     }
 
-    await supabase
+    const { error: mobileProfileError } = await supabase
       .from('users_profile')
       .upsert({
         id: userId,
@@ -185,6 +185,19 @@ Deno.serve(async (req: Request) => {
         attendance_status: 'normal',
         absence_count: 0,
       }, { onConflict: 'id' });
+
+    if (mobileProfileError) {
+      throw new Error(`Failed to update mobile profile: ${mobileProfileError.message}`);
+    }
+
+    if (membershipStatus === 'active') {
+      const { error: membershipError } = await supabase.rpc('assign_active_membership', {
+        p_member_id: userId,
+      });
+      if (membershipError) {
+        throw new Error(`Failed to assign membership code: ${membershipError.message}`);
+      }
+    }
 
     return new Response(
       JSON.stringify({
