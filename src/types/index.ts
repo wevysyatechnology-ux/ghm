@@ -54,6 +54,18 @@ export interface Profile {
   created_at: string;
 }
 
+export interface MembershipTerm {
+  id: string;
+  member_id: string;
+  membership_code: string;
+  start_date: string;
+  end_date: string | null;
+  status: 'active' | 'expired';
+  previous_membership_id: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
 export interface House {
   id: string;
   name: string;

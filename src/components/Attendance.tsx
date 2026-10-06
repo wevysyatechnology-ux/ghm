@@ -21,7 +21,8 @@ interface AttendanceRow {
   status: 'present' | 'late' | 'absent';
   checked_in_at: string;
   check_in_method: 'qr' | 'manual' | 'geo';
-  member?: { full_name: string; house?: { name: string } | null } | null;
+  member?: { full_name: string; membership_code?: string; house?: { name: string } | null } | null;
+  membership?: { membership_code: string } | null;
 }
 
 interface HouseStats {
@@ -73,7 +74,7 @@ export default function Attendance({ readOnly: _readOnly = false }: { readOnly?:
     try {
       const { data, error } = await supabase
         .from('event_attendance')
-        .select('*, member:member_id(full_name, house:house_id(name))')
+        .select('*, member:member_id(full_name, membership_code, house:house_id(name)), membership:membership_id(membership_code)')
         .eq('event_id', eventId)
         .order('checked_in_at', { ascending: true });
       if (error) throw error;
@@ -101,6 +102,7 @@ export default function Attendance({ readOnly: _readOnly = false }: { readOnly?:
   const getExportRows = () => {
     return records.map(r => ({
       Name: r.member?.full_name || '—',
+      'Membership Code': r.membership?.membership_code || r.member?.membership_code || '—',
       House: r.member?.house?.name || '—',
       Status: r.status,
       'Check-in Time': r.status === 'absent' ? '—' : new Date(r.checked_in_at).toLocaleString('en-IN'),
@@ -328,6 +330,7 @@ export default function Attendance({ readOnly: _readOnly = false }: { readOnly?:
                       <span className="text-xs text-[#6B7280] w-6 text-right shrink-0">{i + 1}</span>
                       <div>
                         <p className="text-sm font-medium">{r.member?.full_name || '—'}</p>
+                        <p className="text-xs font-mono text-[#6EE7B7]">{r.membership?.membership_code || r.member?.membership_code || '—'}</p>
                         <p className="text-xs text-[#6B7280]">{r.member?.house?.name || '—'}</p>
                       </div>
                     </div>

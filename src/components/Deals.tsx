@@ -17,8 +17,10 @@ interface CoreDeal {
   created_at: string;
   from_member_id: string | null;
   to_member_id: string | null;
-  from_member?: { full_name: string };
-  to_member?: { full_name: string };
+  from_member?: { full_name: string; membership_code: string };
+  to_member?: { full_name: string; membership_code: string };
+  from_membership?: { membership_code: string };
+  to_membership?: { membership_code: string };
   house?: { name: string };
 }
 
@@ -37,8 +39,10 @@ export default function Deals({ readOnly = false }: { readOnly?: boolean }) {
         .from('core_deals')
         .select(`
           *,
-          from_member:from_member_id(full_name),
-          to_member:to_member_id(full_name),
+          from_member:from_member_id(full_name, membership_code),
+          to_member:to_member_id(full_name, membership_code),
+          from_membership:from_membership_id(membership_code),
+          to_membership:to_membership_id(membership_code),
           house:house_id(name)
         `)
         .order('created_at', { ascending: false });
@@ -116,10 +120,10 @@ export default function Deals({ readOnly = false }: { readOnly?: boolean }) {
                     <p className="text-[#9CA3AF] text-sm mb-2">{deal.description}</p>
                     <div className="flex flex-wrap items-center gap-4 text-xs text-[#6B7280]">
                       {deal.from_member && (
-                        <span>From: <span className="text-gray-300">{deal.from_member.full_name}</span></span>
+                        <span>From: <span className="text-gray-300">{deal.from_member.full_name}</span> <span className="font-mono text-[#6EE7B7]">({deal.from_membership?.membership_code || deal.from_member.membership_code})</span></span>
                       )}
                       {deal.to_member && (
-                        <span>To: <span className="text-gray-300">{deal.to_member.full_name}</span></span>
+                        <span>To: <span className="text-gray-300">{deal.to_member.full_name}</span> <span className="font-mono text-[#6EE7B7]">({deal.to_membership?.membership_code || deal.to_member.membership_code})</span></span>
                       )}
                       {deal.deal_type && (
                         <span className="capitalize">Type: {deal.deal_type}</span>

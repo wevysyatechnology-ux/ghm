@@ -16,8 +16,10 @@ interface CoreLink {
   house_id: string | null;
   status: string;
   created_at: string;
-  from_user?: { full_name: string };
-  to_user?: { full_name: string };
+  from_user?: { full_name: string; membership_code?: string };
+  to_user?: { full_name: string; membership_code?: string };
+  from_membership?: { membership_code: string };
+  to_membership?: { membership_code: string };
   house?: { name: string };
 }
 
@@ -34,7 +36,7 @@ export default function Links({ readOnly = false }: { readOnly?: boolean }) {
     try {
       const { data, error } = await supabase
         .from('core_links')
-        .select('*, house:house_id(name)')
+        .select('*, house:house_id(name), from_membership:from_membership_id(membership_code), to_membership:to_membership_id(membership_code)')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -46,24 +48,31 @@ export default function Links({ readOnly = false }: { readOnly?: boolean }) {
         rows.flatMap(l => [l.from_user_id, l.to_user_id]).filter(Boolean)
       )];
 
-      let nameMap: Record<string, string> = {};
+      let nameMap: Record<string, { full_name: string; membership_code?: string }> = {};
       if (userIds.length > 0) {
         // profiles.auth_user_id = auth.users.id (the FK used by core_links)
         const { data: profilesData } = await supabase
           .from('profiles')
-          .select('id, auth_user_id, full_name')
+          .select('id, auth_user_id, full_name, membership_code')
           .or(userIds.map(id => `auth_user_id.eq.${id},id.eq.${id}`).join(','));
 
         (profilesData || []).forEach(p => {
-          if (p.auth_user_id) nameMap[p.auth_user_id] = p.full_name;
-          nameMap[p.id] = p.full_name;
+          const member = { full_name: p.full_name, membership_code: p.membership_code };
+          if (p.auth_user_id) nameMap[p.auth_user_id] = member;
+          nameMap[p.id] = member;
         });
       }
 
       setLinks(rows.map(link => ({
         ...link,
-        from_user: { full_name: nameMap[link.from_user_id] || '—' },
-        to_user: { full_name: nameMap[link.to_user_id] || '—' },
+        from_user: {
+          ...(nameMap[link.from_user_id] || { full_name: '—' }),
+          membership_code: link.from_membership?.membership_code || nameMap[link.from_user_id]?.membership_code,
+        },
+        to_user: {
+          ...(nameMap[link.to_user_id] || { full_name: '—' }),
+          membership_code: link.to_membership?.membership_code || nameMap[link.to_user_id]?.membership_code,
+        },
       })));
     } catch (error) {
       console.error('Error fetching links:', error);
@@ -130,8 +139,8 @@ export default function Links({ readOnly = false }: { readOnly?: boolean }) {
                     </div>
                     <p className="text-[#9CA3AF] text-sm mb-2">{link.description}</p>
                     <div className="flex flex-wrap items-center gap-4 text-xs text-[#6B7280]">
-                      <span>From: <span className="text-gray-300">{link.from_user?.full_name || '—'}</span></span>
-                      <span>To: <span className="text-gray-300">{link.to_user?.full_name || '—'}</span></span>
+                      <span>From: <span className="text-gray-300">{link.from_user?.full_name || '—'}</span>{link.from_user?.membership_code && <span className="font-mono text-[#6EE7B7]"> ({link.from_user.membership_code})</span>}</span>
+                      <span>To: <span className="text-gray-300">{link.to_user?.full_name || '—'}</span>{link.to_user?.membership_code && <span className="font-mono text-[#6EE7B7]"> ({link.to_user.membership_code})</span>}</span>
                       {link.contact_name && (
                         <span className="flex items-center gap-1">
                           <AlertCircle className="w-3 h-3" /> {link.contact_name}

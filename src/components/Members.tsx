@@ -1,8 +1,8 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Search, User, Plus, Upload, X, Download, AlertCircle, CreditCard as Edit, Trash2, Mail, Phone, Building, Tag, Filter, FileText, FileSpreadsheet, ChevronDown, Globe, MapPin, Layers, Home } from 'lucide-react';
+import { Search, User, Plus, Upload, X, Download, AlertCircle, CreditCard as Edit, Trash2, Mail, Phone, Building, Tag, Filter, FileText, FileSpreadsheet, ChevronDown, Globe, MapPin, Layers, Home, RefreshCw, History, CalendarDays } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { Profile, House, Country, State, Zone } from '../types';
+import { Profile, House, Country, State, Zone, MembershipTerm } from '../types';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -55,6 +55,7 @@ export default function Members({ readOnly: _readOnly = false }: { readOnly?: bo
   const [selectedMember, setSelectedMember] = useState<Profile & { house?: House } | null>(null);
   const [editingMember, setEditingMember] = useState<Profile & { house?: House } | null>(null);
   const [deletingMember, setDeletingMember] = useState<Profile & { house?: House } | null>(null);
+  const [rejoiningMember, setRejoiningMember] = useState<Profile & { house?: House } | null>(null);
 
   // Filter state
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
@@ -670,6 +671,18 @@ export default function Members({ readOnly: _readOnly = false }: { readOnly?: bo
                         >
                           <Edit className="w-4 h-4" />
                         </button>
+                        {canManageMembers && member.membership_status && member.membership_status !== 'active' && (
+                          <button
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setRejoiningMember(member);
+                            }}
+                            className="p-2 rounded-lg text-[#4ADE80] hover:bg-[#14532D] transition-all-smooth"
+                            title="Renew or rejoin member"
+                          >
+                            <RefreshCw className="w-4 h-4" />
+                          </button>
+                        )}
                         {member.role !== 'super_admin' && (
                           <button
                             onClick={() => setDeletingMember(member)}
@@ -853,6 +866,10 @@ export default function Members({ readOnly: _readOnly = false }: { readOnly?: bo
             setDeletingMember(selectedMember);
             setSelectedMember(null);
           }}
+          onRejoin={() => {
+            setRejoiningMember(selectedMember);
+            setSelectedMember(null);
+          }}
           canManage={canManageMembers}
         />
       )}
@@ -874,6 +891,17 @@ export default function Members({ readOnly: _readOnly = false }: { readOnly?: bo
           onClose={() => setDeletingMember(null)}
           onSuccess={() => {
             setDeletingMember(null);
+            fetchMembers(searchQuery, currentPage);
+          }}
+        />
+      )}
+
+      {rejoiningMember && (
+        <RejoinMemberModal
+          member={rejoiningMember}
+          onClose={() => setRejoiningMember(null)}
+          onSuccess={() => {
+            setRejoiningMember(null);
             fetchMembers(searchQuery, currentPage);
           }}
         />
@@ -1424,12 +1452,14 @@ function MemberDetailModal({
   onClose,
   onEdit,
   onDelete,
+  onRejoin,
   canManage
 }: {
   member: Profile & { house?: House };
   onClose: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onRejoin: () => void;
   canManage: boolean;
 }) {
   return (
@@ -1447,6 +1477,15 @@ function MemberDetailModal({
                 >
                   <Edit className="w-5 h-5" />
                 </button>
+                {member.membership_status && member.membership_status !== 'active' && (
+                  <button
+                    onClick={onRejoin}
+                    className="p-2 rounded-lg text-[#4ADE80] hover:bg-[#14532D] transition-all"
+                    title="Renew or rejoin member"
+                  >
+                    <RefreshCw className="w-5 h-5" />
+                  </button>
+                )}
                 {member.role !== 'super_admin' && (
                   <button
                     onClick={onDelete}
@@ -1581,6 +1620,8 @@ function MemberDetailModal({
             </div>
           )}
 
+          {canManage && <MembershipHistory memberId={member.id} />}
+
           <div className="pt-4 border-t border-gray-800 text-sm text-[#6B7280]">
             Member since {new Date(member.created_at).toLocaleDateString('en-US', {
               year: 'numeric',
@@ -1590,6 +1631,104 @@ function MemberDetailModal({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function RejoinMemberModal({ member, onClose, onSuccess }: { member: Profile & { house?: House }; onClose: () => void; onSuccess: () => void }) {
+  const [issueNewCode, setIssueNewCode] = useState(true);
+  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
+  const [endDate, setEndDate] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { data, error: rpcError } = await supabase.rpc('rejoin_member', {
+        p_member_id: member.id,
+        p_issue_new_code: issueNewCode,
+        p_start_date: startDate,
+        p_end_date: endDate || null,
+      });
+      if (rpcError || !data?.[0]?.membership_code) {
+        throw new Error('Unable to complete the membership action.');
+      }
+      onSuccess();
+    } catch (cause) {
+      console.error('Rejoin member failed:', cause);
+      setError('Unable to complete the membership action. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 animate-fade-in">
+      <div className="bg-card rounded-2xl p-8 border border-gray-800/50 max-w-lg w-full animate-slide-up">
+        <div className="flex items-start justify-between mb-6">
+          <div>
+            <div className="flex items-center gap-2 text-[#6EE7B7] mb-2"><RefreshCw className="w-5 h-5" /><span className="text-sm font-semibold uppercase tracking-wider">Renew / Rejoin</span></div>
+            <h2 className="text-2xl font-bold">{member.full_name}</h2>
+            <p className="text-sm font-mono text-[#9CA3AF] mt-1">Current code: {member.membership_code}</p>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-lg text-[#9CA3AF] hover:text-white hover:bg-[#0F1412] transition-all"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="p-4 rounded-xl bg-yellow-900/20 border border-yellow-800/50 text-yellow-300 text-sm mb-5">
+          This member is {member.membership_status || 'inactive'}. Active members cannot be restarted.
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <p className="text-sm font-medium text-[#D1D5DB] mb-2">Issue a new membership code?</p>
+            <div className="grid grid-cols-2 gap-3">
+              <button type="button" onClick={() => setIssueNewCode(true)} className={`p-3 rounded-xl border text-left transition-all ${issueNewCode ? 'border-[#4ADE80] bg-green-900/20 text-[#4ADE80]' : 'border-gray-800 text-[#9CA3AF]'}`}>
+                <p className="font-semibold">Yes</p><p className="text-xs mt-1 opacity-80">New automatic B-number</p>
+              </button>
+              <button type="button" onClick={() => setIssueNewCode(false)} className={`p-3 rounded-xl border text-left transition-all ${!issueNewCode ? 'border-[#6EE7B7] bg-teal-900/20 text-[#6EE7B7]' : 'border-gray-800 text-[#9CA3AF]'}`}>
+                <p className="font-semibold">No</p><p className="text-xs mt-1 opacity-80">Keep {member.membership_code}</p>
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="text-sm text-[#9CA3AF]">Start date<input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="mt-2 w-full px-3 py-2.5 rounded-lg bg-[#0F1412] border border-gray-800 text-white" /></label>
+            <label className="text-sm text-[#9CA3AF]">End date (optional)<input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="mt-2 w-full px-3 py-2.5 rounded-lg bg-[#0F1412] border border-gray-800 text-white" /></label>
+          </div>
+          {error && <div className="p-3 rounded-xl bg-red-900/20 border border-red-800/50 text-red-400 text-sm">{error}</div>}
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white hover:bg-[#14532D] transition-all">Cancel</button>
+            <button type="button" onClick={handleSubmit} disabled={loading || !startDate} className="flex-1 px-4 py-3 rounded-xl font-semibold disabled:opacity-50" style={{ backgroundColor: '#4ADE80', color: '#0B0F0E' }}>{loading ? 'Saving...' : 'Confirm'}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MembershipHistory({ memberId }: { memberId: string }) {
+  const [terms, setTerms] = useState<MembershipTerm[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadHistory = async () => {
+      const { data, error } = await supabase.from('memberships').select('*').eq('member_id', memberId).order('created_at', { ascending: false });
+      if (error) console.error('Membership history load failed:', error);
+      if (mounted) {
+        setTerms((data || []) as MembershipTerm[]);
+        setLoading(false);
+      }
+    };
+    loadHistory();
+    return () => { mounted = false; };
+  }, [memberId]);
+
+  return (
+    <div className="pt-5 border-t border-gray-800">
+      <div className="flex items-center gap-2 mb-3"><History className="w-4 h-4 text-[#6EE7B7]" /><h4 className="font-semibold">Membership History</h4></div>
+      {loading ? <p className="text-sm text-[#6B7280]">Loading history...</p> : terms.length === 0 ? <p className="text-sm text-[#6B7280]">No membership history available.</p> : <div className="space-y-2">{terms.map((term) => <div key={term.id} className="flex items-center justify-between gap-3 p-3 rounded-xl bg-[#0F1412] border border-gray-800/70"><div><p className={`font-mono font-semibold ${term.status === 'active' ? 'text-[#4ADE80]' : 'text-[#9CA3AF]'}`}>{term.membership_code}</p><p className="text-xs text-[#6B7280] flex items-center gap-1"><CalendarDays className="w-3 h-3" />{term.start_date} — {term.end_date || 'Present'}</p></div><span className={`text-xs px-2 py-1 rounded-full ${term.status === 'active' ? 'bg-green-900/30 text-green-400' : 'bg-gray-800 text-gray-400'}`}>{term.status}</span></div>)}</div>}
     </div>
   );
 }

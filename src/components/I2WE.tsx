@@ -11,8 +11,10 @@ interface CoreI2WE {
   notes: string;
   status: string;
   created_at: string;
-  member_1?: { full_name: string };
-  member_2?: { full_name: string };
+  member_1?: { full_name: string; membership_code?: string };
+  member_2?: { full_name: string; membership_code?: string };
+  member_1_membership?: { membership_code: string };
+  member_2_membership?: { membership_code: string };
 }
 
 interface ProfileOption {
@@ -64,7 +66,7 @@ export default function I2WE({ readOnly = false }: { readOnly?: boolean }) {
     try {
       const { data, error } = await supabase
         .from('core_i2we')
-        .select('*')
+        .select('*, member_1_membership:member_1_membership_id(membership_code), member_2_membership:member_2_membership_id(membership_code)')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -75,23 +77,30 @@ export default function I2WE({ readOnly = false }: { readOnly?: boolean }) {
         rows.flatMap(e => [e.member_1_id, e.member_2_id]).filter(Boolean)
       )];
 
-      let nameMap: Record<string, string> = {};
+      let nameMap: Record<string, { full_name: string; membership_code?: string }> = {};
       if (userIds.length > 0) {
         const { data: profilesData } = await supabase
           .from('profiles')
-          .select('id, auth_user_id, full_name')
+          .select('id, auth_user_id, full_name, membership_code')
           .or(userIds.map(id => `auth_user_id.eq.${id},id.eq.${id}`).join(','));
 
         (profilesData || []).forEach(p => {
-          if (p.auth_user_id) nameMap[p.auth_user_id] = p.full_name;
-          nameMap[p.id] = p.full_name;
+          const member = { full_name: p.full_name, membership_code: p.membership_code };
+          if (p.auth_user_id) nameMap[p.auth_user_id] = member;
+          nameMap[p.id] = member;
         });
       }
 
       setEvents(rows.map(e => ({
         ...e,
-        member_1: { full_name: nameMap[e.member_1_id] || '—' },
-        member_2: { full_name: nameMap[e.member_2_id] || '—' },
+        member_1: {
+          ...(nameMap[e.member_1_id] || { full_name: '—' }),
+          membership_code: e.member_1_membership?.membership_code || nameMap[e.member_1_id]?.membership_code,
+        },
+        member_2: {
+          ...(nameMap[e.member_2_id] || { full_name: '—' }),
+          membership_code: e.member_2_membership?.membership_code || nameMap[e.member_2_id]?.membership_code,
+        },
       })));
     } catch (error) {
       console.error('Error fetching I2WE events:', error);
@@ -150,9 +159,9 @@ export default function I2WE({ readOnly = false }: { readOnly?: boolean }) {
                   <div className="flex-1">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center space-x-2">
-                        <span className="font-semibold">{event.member_1?.full_name || '—'}</span>
+                        <span className="font-semibold">{event.member_1?.full_name || '—'}{event.member_1?.membership_code && <span className="ml-1 font-mono text-xs text-[#6EE7B7]">({event.member_1.membership_code})</span>}</span>
                         <span className="text-[#6B7280]">↔</span>
-                        <span className="font-semibold">{event.member_2?.full_name || '—'}</span>
+                        <span className="font-semibold">{event.member_2?.full_name || '—'}{event.member_2?.membership_code && <span className="ml-1 font-mono text-xs text-[#6EE7B7]">({event.member_2.membership_code})</span>}</span>
                       </div>
                       <span
                         className="text-xs px-2 py-0.5 rounded-full font-medium capitalize"
