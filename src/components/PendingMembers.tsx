@@ -116,6 +116,7 @@ export default function PendingMembers({ readOnly = false }: { readOnly?: boolea
                       <div>
                         <h3 className="font-semibold">{member.full_name}</h3>
                         <p className="text-xs text-yellow-400">Pending Approval</p>
+                        <p className="text-xs font-mono text-[#6EE7B7] mt-1">{member.membership_code || 'Not assigned'}</p>
                       </div>
                     </div>
                   </div>
@@ -235,6 +236,7 @@ function MemberDetailModal({
             <div>
               <h3 className="text-2xl font-bold">{member.full_name}</h3>
               <p className="text-yellow-400">Pending Approval</p>
+              <p className="text-sm font-mono text-[#6EE7B7] mt-1">Membership Code: {member.membership_code || 'Not assigned'}</p>
             </div>
           </div>
 
