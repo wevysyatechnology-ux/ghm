@@ -171,6 +171,9 @@ export default function Members({ readOnly: _readOnly = false }: { readOnly?: bo
   const fetchMembers = async (query: string, page: number) => {
     setLoading(true);
     try {
+      const { error: expiryError } = await supabase.rpc('expire_due_memberships');
+      if (expiryError) console.error('Membership expiry check failed:', expiryError);
+
       const from = (page - 1) * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
