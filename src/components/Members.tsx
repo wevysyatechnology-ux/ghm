@@ -1843,6 +1843,7 @@ interface ImportMember {
   full_name: string;
   role: string;
   membership_status: string;
+  membership_code?: string;
   house_id?: string;
   zone?: string;
   business?: string;
@@ -1858,6 +1859,7 @@ interface ImportResultRow {
   full_name: string;
   status: 'created' | 'already_exists' | 'failed';
   message: string;
+  membership_code?: string;
 }
 
 function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
@@ -1887,6 +1889,7 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
       {
         'Full Name': 'John Doe',
         'Email': 'john@example.com',
+        'Membership Code': '',
         'Mobile': '9876543210',
         'Role': 'member',
         'House': 'Example House',
@@ -1899,6 +1902,7 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
       {
         'Full Name': 'Jane Smith',
         'Email': 'jane@example.com',
+        'Membership Code': '',
         'Mobile': '9876543211',
         'Role': 'member',
         'House': 'Another House',
@@ -1916,6 +1920,7 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
       { wch: 25 },
       { wch: 15 },
       { wch: 15 },
+      { wch: 18 },
       { wch: 20 },
       { wch: 15 },
       { wch: 25 },
@@ -1933,8 +1938,8 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
       const fileExtension = selectedFile.name.split('.').pop()?.toLowerCase();
-      if (fileExtension !== 'xls' && fileExtension !== 'xlsx') {
-        setError('Please upload a valid Excel file (.xls or .xlsx)');
+      if (fileExtension !== 'csv' && fileExtension !== 'xls' && fileExtension !== 'xlsx') {
+        setError('Please upload a valid Excel or CSV file (.xls, .xlsx, or .csv)');
         return;
       }
       setFile(selectedFile);
@@ -1979,9 +1984,12 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
         };
         const normalizedStatus = statusAliasMap[rawStatus] ?? 'active';
 
+        const membershipCodeValue = (row['Membership Code'] || row['membership_code'] || row['Membership_Code'] || '').toString().trim().toUpperCase();
+
         const member: ImportMember = {
           full_name: row['Full Name'] || row['full_name'] || '',
           email: (row['Email'] || row['email'] || '').toString().trim().toLowerCase(),
+          membership_code: membershipCodeValue || undefined,
           mobile: row['Mobile'] || row['mobile'] || '',
           role: normalizedRole,
           membership_status: normalizedStatus,
@@ -2006,8 +2014,24 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
         if (member.role !== 'member') {
           member.errors!.push('Only member role is allowed for bulk import');
         }
+        if (member.membership_code && !/^B[0-9]+$/.test(member.membership_code)) {
+          member.errors!.push('Membership Code must use B followed by numbers');
+        }
 
         return member;
+      });
+
+      const initialValid = members.filter(m => !m.errors || m.errors.length === 0);
+      const seenCodes = new Map<string, ImportMember>();
+      initialValid.forEach((member) => {
+        if (!member.membership_code) return;
+        const firstMember = seenCodes.get(member.membership_code);
+        if (firstMember) {
+          member.errors!.push('Duplicate membership code within file');
+          firstMember.errors!.push('Duplicate membership code within file');
+        } else {
+          seenCodes.set(member.membership_code, member);
+        }
       });
 
       const formatValid = members.filter(m => !m.errors || m.errors.length === 0);
@@ -2039,14 +2063,36 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
         });
 
         const existingEmails = new Set<string>((authEmails as string[] || []).map(e => e.toLowerCase()));
+        const requestedCodes = uniqueCandidates
+          .map(m => m.membership_code)
+          .filter((code): code is string => Boolean(code));
+        let existingCodes = new Set<string>();
+        if (requestedCodes.length > 0) {
+          const { data: existingCodeRows, error: existingCodesError } = await supabase
+            .from('profiles')
+            .select('membership_code')
+            .in('membership_code', requestedCodes);
+          if (existingCodesError) throw existingCodesError;
+          existingCodes = new Set((existingCodeRows || []).map((row: { membership_code: string }) => row.membership_code));
+        }
 
-        dbDuplicates = uniqueCandidates.filter(m => existingEmails.has(m.email.toLowerCase()));
-        finalValid = uniqueCandidates.filter(m => !existingEmails.has(m.email.toLowerCase()));
+        const emailDuplicates = uniqueCandidates.filter(m => existingEmails.has(m.email.toLowerCase()));
+        const codeDuplicates = uniqueCandidates.filter(m => m.membership_code && existingCodes.has(m.membership_code));
+        emailDuplicates.forEach((member) => {
+          member.errors = ['Email already exists in database'];
+        });
+        codeDuplicates.forEach((member) => {
+          member.errors = ['Membership code already exists in database'];
+        });
+        dbDuplicates = [...emailDuplicates, ...codeDuplicates];
+        finalValid = uniqueCandidates.filter(
+          m => !existingEmails.has(m.email.toLowerCase()) && !(m.membership_code && existingCodes.has(m.membership_code))
+        );
       }
 
       const allDuplicates = [
         ...intraFileDuplicates.map(m => ({ ...m, errors: ['Duplicate email within file'] })),
-        ...dbDuplicates.map(m => ({ ...m, errors: ['Email already exists in database'] })),
+        ...dbDuplicates,
       ];
 
       setParsedData(members);
@@ -2106,6 +2152,7 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
               industry: memberData.industry || null,
               mobile: memberData.mobile || null,
               keywords: memberData.keywords || [],
+              membership_code: memberData.membership_code || null,
             },
           });
 
@@ -2145,7 +2192,10 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
               email: memberData.email,
               full_name: memberData.full_name,
               status: 'created',
-              message: 'User created and activated successfully',
+              membership_code: data.membership_code || undefined,
+              message: data.membership_code
+                ? `User created and assigned ${data.membership_code}`
+                : 'User created successfully',
             });
           }
         } catch (err: any) {
@@ -2197,7 +2247,7 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
             <div>
               <p className="font-medium mb-1">Need a template?</p>
               <p className="text-sm text-[#9CA3AF]">Download our Excel template to get started</p>
-              <p className="text-xs text-[#6B7280] mt-1">Note: Only "member" role is allowed for bulk import (mobile app users)</p>
+              <p className="text-xs text-[#6B7280] mt-1">Membership Code is optional: supplied codes are kept, blank codes get the next available number. Excel and CSV files are supported.</p>
             </div>
             <button
               onClick={downloadTemplate}
@@ -2209,10 +2259,10 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Upload Excel File</label>
+            <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Upload Excel or CSV File</label>
             <input
               type="file"
-              accept=".xls,.xlsx"
+              accept=".csv,.xls,.xlsx"
               onChange={handleFileChange}
               className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#4ADE80] file:text-[#0B0F0E] hover:file:brightness-110 file:cursor-pointer"
             />
@@ -2258,6 +2308,7 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
                         <tr>
                           <th className="text-left py-2 px-3 text-[#9CA3AF]">Name</th>
                           <th className="text-left py-2 px-3 text-[#9CA3AF]">Email</th>
+                          <th className="text-left py-2 px-3 text-[#9CA3AF]">Membership Code</th>
                           <th className="text-left py-2 px-3 text-[#9CA3AF]">Role</th>
                           <th className="text-left py-2 px-3 text-[#9CA3AF]">Business</th>
                         </tr>
@@ -2267,6 +2318,7 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
                           <tr key={index} className="border-t border-gray-800/50">
                             <td className="py-2 px-3">{member.full_name}</td>
                             <td className="py-2 px-3 text-[#9CA3AF]">{member.email}</td>
+                            <td className="py-2 px-3 font-mono text-[#6EE7B7]">{member.membership_code || 'Auto'}</td>
                             <td className="py-2 px-3 text-[#9CA3AF] capitalize">{member.role.replace('_', ' ')}</td>
                             <td className="py-2 px-3 text-[#9CA3AF]">{member.business || '-'}</td>
                           </tr>

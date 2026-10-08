@@ -19,6 +19,7 @@ interface RequestBody {
   mobile?: string | null;
   keywords?: string[];
   mobile_app_access?: string;
+  membership_code?: string | null;
 }
 
 Deno.serve(async (req: Request) => {
@@ -190,13 +191,16 @@ Deno.serve(async (req: Request) => {
       throw new Error(`Failed to update mobile profile: ${mobileProfileError.message}`);
     }
 
+    let assignedMembershipCode: string | null = null;
     if (membershipStatus === 'active') {
-      const { error: membershipError } = await supabase.rpc('assign_active_membership', {
+      const { data: membershipCode, error: membershipError } = await supabase.rpc('assign_membership_code', {
         p_member_id: userId,
+        p_requested_code: body.membership_code || null,
       });
       if (membershipError) {
         throw new Error(`Failed to assign membership code: ${membershipError.message}`);
       }
+      assignedMembershipCode = membershipCode;
     }
 
     return new Response(
@@ -204,6 +208,7 @@ Deno.serve(async (req: Request) => {
         success: true,
         user_id: userId,
         was_existing: wasExisting,
+        membership_code: assignedMembershipCode,
       }),
       {
         headers: {
