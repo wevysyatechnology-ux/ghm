@@ -1185,9 +1185,11 @@ function EditMemberModal({ member, onClose, onSuccess }: { member: Profile & { h
     mobile: member.mobile || '',
     keywords: member.keywords?.join(', ') || '',
     newPassword: '',
+    membership_code: member.membership_code || '',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [codeChanged, setCodeChanged] = useState(false);
 
   useEffect(() => {
     fetchHouses();
@@ -1230,6 +1232,32 @@ function EditMemberModal({ member, onClose, onSuccess }: { member: Profile & { h
         const result = await response.json();
         if (!response.ok) {
           throw new Error(result.error || 'Failed to update password');
+        }
+      }
+
+      if (codeChanged) {
+        const normalizedCode = formData.membership_code.trim().toUpperCase();
+        if (normalizedCode && !/^B[0-9]+$/.test(normalizedCode)) {
+          throw new Error('Membership Code must use B followed by numbers (e.g. B2215)');
+        }
+        if (normalizedCode && normalizedCode !== (member.membership_code || '').toUpperCase()) {
+          const { data: existing, error: checkError } = await supabase
+            .from('profiles')
+            .select('id, full_name')
+            .eq('membership_code', normalizedCode)
+            .neq('id', member.id)
+            .maybeSingle();
+          if (checkError) throw checkError;
+          if (existing) {
+            throw new Error(`Membership code ${normalizedCode} is already assigned to ${existing.full_name}`);
+          }
+        }
+        const { error: codeError } = await supabase.rpc('update_membership_code', {
+          p_member_id: member.id,
+          p_new_code: normalizedCode || null,
+        });
+        if (codeError) {
+          throw new Error(codeError.message);
         }
       }
 
@@ -1305,6 +1333,20 @@ function EditMemberModal({ member, onClose, onSuccess }: { member: Profile & { h
                 className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow"
                 required
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Membership Code</label>
+              <input
+                type="text"
+                value={formData.membership_code}
+                onChange={(e) => {
+                  setFormData({ ...formData, membership_code: e.target.value });
+                  setCodeChanged(true);
+                }}
+                placeholder="B2215 or leave blank for auto"
+                className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow font-mono"
+              />
+              <p className="text-xs text-[#6B7280] mt-1">Change to correct a wrong code. Must be unique — duplicates will be rejected.</p>
             </div>
             <div>
               <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Mobile</label>
