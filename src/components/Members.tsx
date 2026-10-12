@@ -215,7 +215,7 @@ export default function Members({ readOnly: _readOnly = false }: { readOnly?: bo
 
       if (trimmed) {
         const safe = `%${trimmed}%`;
-        idsQuery = idsQuery.or(`full_name.ilike.${safe},email.ilike.${safe}`);
+        idsQuery = idsQuery.or(`full_name.ilike.${safe},email.ilike.${safe},membership_code.ilike.${safe}`);
       }
 
       if (statusFilter !== 'all') {
@@ -288,7 +288,7 @@ export default function Members({ readOnly: _readOnly = false }: { readOnly?: bo
 
     if (trimmed) {
       const safe = `%${trimmed}%`;
-      query = query.or(`full_name.ilike.${safe},email.ilike.${safe}`);
+      query = query.or(`full_name.ilike.${safe},email.ilike.${safe},membership_code.ilike.${safe}`);
     }
 
     if (statusFilter !== 'all') {
@@ -497,7 +497,7 @@ export default function Members({ readOnly: _readOnly = false }: { readOnly?: bo
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#6B7280]" />
             <input
               type="text"
-              placeholder="Search by name or email..."
+              placeholder="Search by name, email, or membership code..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               className="w-full pl-12 pr-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow transition-all"
