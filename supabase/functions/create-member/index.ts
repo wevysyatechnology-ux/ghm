@@ -20,6 +20,7 @@ interface RequestBody {
   keywords?: string[];
   mobile_app_access?: string;
   membership_code?: string | null;
+  member_since?: string | null;
 }
 
 Deno.serve(async (req: Request) => {
@@ -163,6 +164,7 @@ Deno.serve(async (req: Request) => {
       mobile: body.mobile || null,
       keywords: body.keywords || [],
       mobile_app_access: body.mobile_app_access || 'enabled',
+      member_since: body.member_since || null,
     };
 
     const { error: upsertError } = await supabase
@@ -185,6 +187,7 @@ Deno.serve(async (req: Request) => {
         is_suspended: isSuspended,
         attendance_status: 'normal',
         absence_count: 0,
+        member_since: body.member_since || null,
       }, { onConflict: 'id' });
 
     if (mobileProfileError) {

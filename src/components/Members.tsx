@@ -333,7 +333,7 @@ export default function Members({ readOnly: _readOnly = false }: { readOnly?: bo
       'House': m.house?.name || '',
       'House State': m.house?.state || '',
       'House Country': m.house?.country || '',
-      'Member Since': m.created_at ? new Date(m.created_at).toLocaleDateString() : '',
+      'Member Since': m.member_since ? new Date(m.member_since).toLocaleDateString() : (m.created_at ? new Date(m.created_at).toLocaleDateString() : ''),
     }));
   };
 
@@ -927,6 +927,7 @@ function AddMemberModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
     mobile: '',
     keywords: '',
     mobile_app_access: 'enabled' as 'enabled' | 'disabled' | 'pending',
+    member_since: new Date().toISOString().slice(0, 10),
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -981,6 +982,7 @@ function AddMemberModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
           mobile: formData.mobile || null,
           keywords: keywordsArray,
           mobile_app_access: formData.mobile_app_access,
+          member_since: formData.member_since || null,
         },
       });
 
@@ -1129,6 +1131,15 @@ function AddMemberModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
                 className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow"
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Member Since</label>
+              <input
+                type="date"
+                value={formData.member_since}
+                onChange={(e) => setFormData({ ...formData, member_since: e.target.value })}
+                className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow"
+              />
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Keywords (comma-separated)</label>
@@ -1186,6 +1197,7 @@ function EditMemberModal({ member, onClose, onSuccess }: { member: Profile & { h
     keywords: member.keywords?.join(', ') || '',
     newPassword: '',
     membership_code: member.membership_code || '',
+    member_since: member.member_since ? member.member_since.slice(0, 10) : '',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -1273,6 +1285,7 @@ function EditMemberModal({ member, onClose, onSuccess }: { member: Profile & { h
         business: formData.business || null,
         industry: formData.industry || null,
         mobile: formData.mobile || null,
+        member_since: formData.member_since || null,
       };
 
       const { error } = await supabase
@@ -1436,6 +1449,15 @@ function EditMemberModal({ member, onClose, onSuccess }: { member: Profile & { h
                 type="text"
                 value={formData.industry}
                 onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
+                className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2 text-[#9CA3AF]">Member Since</label>
+              <input
+                type="date"
+                value={formData.member_since}
+                onChange={(e) => setFormData({ ...formData, member_since: e.target.value })}
                 className="w-full px-4 py-3 rounded-xl bg-[#0F1412] border border-gray-800 text-white placeholder-gray-600 focus:outline-none input-glow"
               />
             </div>
@@ -1668,7 +1690,7 @@ function MemberDetailModal({
           {canManage && <MembershipHistory memberId={member.id} />}
 
           <div className="pt-4 border-t border-gray-800 text-sm text-[#6B7280]">
-            Member since {new Date(member.created_at).toLocaleDateString('en-US', {
+            Member since {new Date(member.member_since || member.created_at).toLocaleDateString('en-US', {
               year: 'numeric',
               month: 'long',
               day: 'numeric'
@@ -1886,6 +1908,7 @@ interface ImportMember {
   role: string;
   membership_status: string;
   membership_code?: string;
+  member_since?: string;
   house_id?: string;
   zone?: string;
   business?: string;
@@ -1939,7 +1962,8 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
         'Business': 'Technology Solutions',
         'Industry': 'IT',
         'Keywords': 'technology, consulting, cloud',
-        'Membership Status': 'active'
+        'Membership Status': 'active',
+        'Member Since': '2024-01-15'
       },
       {
         'Full Name': 'Jane Smith',
@@ -1952,7 +1976,8 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
         'Business': 'Consulting Services',
         'Industry': 'Business',
         'Keywords': 'consulting, management',
-        'Membership Status': 'active'
+        'Membership Status': 'active',
+        'Member Since': '2024-02-01'
       }
     ];
 
@@ -1968,7 +1993,8 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
       { wch: 25 },
       { wch: 15 },
       { wch: 30 },
-      { wch: 20 }
+      { wch: 20 },
+      { wch: 15 }
     ];
 
     const wb = XLSX.utils.book_new();
@@ -2028,10 +2054,13 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
 
         const membershipCodeValue = (row['Membership Code'] || row['membership_code'] || row['Membership_Code'] || '').toString().trim().toUpperCase();
 
+        const memberSinceValue = (row['Member Since'] || row['member_since'] || row['Member_Since'] || '').toString().trim();
+
         const member: ImportMember = {
           full_name: row['Full Name'] || row['full_name'] || '',
           email: (row['Email'] || row['email'] || '').toString().trim().toLowerCase(),
           membership_code: membershipCodeValue || undefined,
+          member_since: memberSinceValue || undefined,
           mobile: row['Mobile'] || row['mobile'] || '',
           role: normalizedRole,
           membership_status: normalizedStatus,
@@ -2195,6 +2224,7 @@ function ImportMembersModal({ onClose, onSuccess }: { onClose: () => void; onSuc
               mobile: memberData.mobile || null,
               keywords: memberData.keywords || [],
               membership_code: memberData.membership_code || null,
+              member_since: memberData.member_since || null,
             },
           });
 
